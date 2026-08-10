@@ -67,8 +67,10 @@ export function assertOk(res, url) {
   err.status = res.status;
   if (res.status === 429) {
     const ra = Number(res.headers.get('retry-after'));
+    // Yahoo genelde Retry-After gondermiyor. Varsayilan 500ms'lik geri cekilme
+    // hiz siniri icin cok kisa; 429'a ozel daha genis bir taban veriliyor.
     // @ts-ignore
-    if (Number.isFinite(ra)) err.retryAfterMs = ra * 1000;
+    err.retryAfterMs = Number.isFinite(ra) ? ra * 1000 : 3000;
   } else if (res.status >= 400 && res.status < 500) {
     // @ts-ignore
     err.permanent = true;

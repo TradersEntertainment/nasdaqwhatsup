@@ -139,9 +139,22 @@ async function onSnapshot(next) {
   }
 }
 
-connect(onSnapshot, ({ connected }) => {
+connect(onSnapshot, ({ connected, health }) => {
   // Iskelet parlamasi yok — onceki render yerinde solar.
   document.body.classList.toggle('refreshing', !connected);
+
+  // Hic veri gelmediyse kullaniciyi sonsuz "yukleniyor" ekraninda birakma.
+  if (!snap && health && health.ready === false) {
+    const errs = (health.lastErrors ?? []).join(' · ') || 'sebep bildirilmedi';
+    $('hero').innerHTML = `
+      <p class="verdict-title">Veri kaynağına ulaşılamıyor</p>
+      <p class="verdict-body">
+        Sunucu ayakta (${int(health.uptimeSec ?? 0)} sn) ama piyasa verisi
+        henüz alınamadı. Üst üste <b>${int(health.consecutiveFailures ?? 0)}</b>
+        deneme başarısız oldu.
+      </p>
+      <p class="empty" style="text-align:left;padding-top:10px">${errs}</p>`;
+  }
 });
 
 // Saat ve geri sayim, veri gelmese de akmali.

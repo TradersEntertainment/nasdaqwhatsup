@@ -22,7 +22,14 @@ export function connect(onSnapshot, onState = () => {}) {
       if (r.ok) {
         onSnapshot(await r.json());
         onState({ connected: true, mode: 'poll' });
+        return;
       }
+      // Veri henuz yok (503). Sessizce "yukleniyor"da birakma — sunucunun
+      // durumunu sor ve SEBEBINI goster.
+      const h = await fetch('/api/health', { cache: 'no-store' })
+        .then((x) => (x.ok ? x.json() : null))
+        .catch(() => null);
+      onState({ connected: false, mode: 'poll', health: h });
     } catch {
       onState({ connected: false, mode: 'poll' });
     }

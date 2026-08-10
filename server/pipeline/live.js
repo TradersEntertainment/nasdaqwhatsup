@@ -14,9 +14,9 @@ import { ROOT } from '../config.js';
 import { log } from '../lib/log.js';
 import * as storage from '../storage.js';
 import { paths } from '../storage.js';
-import { fetchQuotes, fetchBaselines, pickCurrent } from '../sources/yahoo.js';
+import { fetchQuotes, fetchBaselines, fetchChartAll, pickCurrent } from '../sources/yahoo.js';
 import { fetchHoldings } from '../sources/invesco.js';
-import { sessionStartUtc, tsiDate } from '../../shared/session.js';
+import { sessionStartUtc, tsiDate, sessionState, phaseBoundaries } from '../../shared/session.js';
 
 const NDX = '^NDX';
 const WEIGHTS_TTL_MS = 20 * 3600_000;
@@ -25,6 +25,43 @@ const WEIGHTS_TTL_MS = 20 * 3600_000;
 let weightsCache = null;
 /** @type {{day: string, map: Map<string, any>}|null} */
 let baselineCache = null;
+
+/**
+ * Crumb yolu 429 yedigi zaman bir sure ona hic dokunma. Hiz sinirine
+ * takilmis bir ucu her 5 dakikada tekrar dovmek durumu kotulestirir.
+ */
+let crumbBlockedUntil = 0;
+const CRUMB_COOLDOWN_MS = 30 * 60_000;
+
+/**
+ * Kotasyonlari dener; hiz siniri / el sikismasi hatasinda FIRLATMAZ, null
+ * doner ki cagiran crumb'siz chart yoluna dusebilsin.
+ * @param {string[]} symbols
+ */
+async function tryQuotes(symbols) {
+  if (Date.now() < crumbBlockedUntil) {
+    log.debug('crumb yolu sogumada, atlaniyor');
+    return null;
+  }
+  try {
+    const q = await fetchQuotes(symbols);
+    if (q.size === 0) throw new Error('hicbir kotasyon donmedi');
+    return q;
+  } catch (err) {
+    const status = /** @type {any} */ (err)?.status;
+    if (status === 429) {
+      crumbBlockedUntil = Date.now() + CRUMB_COOLDOWN_MS;
+      log.warn('Yahoo crumb yolu hiz sinirinda — chart yoluna geciliyor', {
+        sogumaDk: CRUMB_COOLDOWN_MS / 60000,
+      });
+    } else {
+      log.warn('kotasyon yolu basarisiz — chart yoluna geciliyor', {
+        err: String(err?.message ?? err),
+      });
+    }
+    return null;
+  }
+}
 
 /* ---------- Agirliklar (pay adetleri) ---------- */
 
@@ -119,18 +156,35 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   const weights = await getWeights();
   const symbols = weights.holdings.map((h) => h.s);
 
-  const quotes = await fetchQuotes([...symbols, NDX]);
-  const baselines = fast
-    ? new Map()
-    : await getBaselines(symbols, startUtc, refreshBaselines);
+  const quotes = await tryQuotes([...symbols, NDX]);
+
+  // Crumb yolu calismiyorsa chart yolu HEM bazi HEM guncel fiyati veriyor;
+  // o durumda ayrica baz cekmeye gerek yok.
+  const st = sessionState(nowUtc);
+  const regOpen = st.isTradingDay ? phaseBoundaries(st.usDate).regOpen : null;
+  /** @type {Map<string, any>|null} */
+  let chart = null;
+  if (!quotes) {
+    chart = (await fetchChartAll([...symbols, NDX], startUtc, regOpen)).series;
+    if (chart.size === 0) {
+      throw new Error('Ne kotasyon ne chart yolu calisti — Yahoo erisilemiyor');
+    }
+  }
+
+  const baselines = quotes && !fast
+    ? await getBaselines(symbols, startUtc, refreshBaselines)
+    : new Map();
 
   /** @type {string[]} */
   const missing = [];
   const rows = [];
 
   for (const h of weights.holdings) {
-    const q = quotes.get(h.s);
-    const b = baselines.get(h.s);
+    const q = quotes?.get(h.s);
+    const ch = chart?.get(h.s);
+    const b = baselines.get(h.s) ?? (ch?.baseline > 0
+      ? { baseline: ch.baseline, at: ch.baselineAt, source: 'chart-bar' }
+      : null);
 
     // Baz yedek zinciri: chart bari -> onceki resmi kapanis (kisin tam, yazin
     // ~1 saat eksik) -> sembolu dusur.
@@ -143,7 +197,9 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
       baselineSource = 'prev-close-approx';
     }
 
-    const cur = q ? pickCurrent(q, startUtc) : null;
+    const cur = q
+      ? pickCurrent(q, startUtc)
+      : (ch?.price > 0 ? { price: ch.price, at: ch.priceAt, kind: 'CHART' } : null);
 
     if (!(baseline > 0)) { missing.push(h.s); continue; }
 
@@ -160,7 +216,8 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
       baseline,
       price,
       open: Number.isFinite(q?.regularMarketOpen) && q.regularMarketOpen > 0
-        ? q.regularMarketOpen : null,
+        ? q.regularMarketOpen
+        : (ch?.open > 0 ? ch.open : null),
       lastTradeAtUtc: cur?.at ?? null,
       baselineAtUtc: baselineAt,
       baselineSource,
@@ -168,10 +225,12 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   }
 
   // Endeks referans seviyesi ve resmi ana seans yuzdesi.
-  const ndxQ = quotes.get(NDX);
-  const ndxB = baselines.get(NDX);
+  const ndxQ = quotes?.get(NDX);
+  const ndxC = chart?.get(NDX);
   const ndxBase =
-    ndxB?.baseline ??
+    baselines.get(NDX)?.baseline ??
+    ndxC?.baseline ??
+    ndxC?.prevClose ??
     (Number.isFinite(ndxQ?.regularMarketPreviousClose) ? ndxQ.regularMarketPreviousClose : null);
 
   if (!(ndxBase > 0)) {
@@ -179,6 +238,7 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   }
 
   const warnings = [];
+  if (chart) warnings.push('chart-fallback');
   if (weights.source !== 'invesco') warnings.push('weights-approx');
   if (missing.length) warnings.push('missing-symbols');
   if (fast) warnings.push('provisional-baselines');
@@ -188,11 +248,14 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
     ndxBase,
     nowUtc,
     officialRegularPct: Number.isFinite(ndxQ?.regularMarketChangePercent)
-      ? ndxQ.regularMarketChangePercent : null,
+      ? ndxQ.regularMarketChangePercent
+      : (ndxC?.price > 0 && ndxC?.prevClose > 0
+          ? (ndxC.price / ndxC.prevClose - 1) * 100 : null),
     officialRegularLevel: Number.isFinite(ndxQ?.regularMarketPrice)
-      ? ndxQ.regularMarketPrice : null,
+      ? ndxQ.regularMarketPrice
+      : (ndxC?.price ?? null),
     quality: {
-      source: 'yahoo',
+      source: chart ? 'yahoo-chart' : 'yahoo',
       weightsSource: weights.source === 'bundled-approx' ? 'bundled-approx' : weights.source,
       weightsAsOf: weights.asOf,
       missing,

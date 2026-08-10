@@ -99,9 +99,20 @@ export function parseHoldings(csv) {
 /** @returns {Promise<{holdings: any[], fetchedAt: string}>} */
 export async function fetchHoldings() {
   const csv = await withRetry(async () => {
+    // 406 Not Acceptable: sunucu dar bir `Accept` basligini reddediyor.
+    // Uretimde tam olarak bu yasandi. Indirme baglantisi bir tarayicidan
+    // tiklaniyormus gibi davraniyoruz.
     const res = await fetchWithTimeout(URL_QQQ, {
       timeoutMs: 20_000,
-      headers: { Accept: 'text/csv,application/csv,*/*' },
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,text/csv,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        Referer: 'https://www.invesco.com/qqq-etf/en/holdings.html',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Upgrade-Insecure-Requests': '1',
+      },
     });
     assertOk(res, URL_QQQ);
     return res.text();

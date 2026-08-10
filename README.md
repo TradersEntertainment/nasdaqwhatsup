@@ -117,7 +117,9 @@ curl https://<uygulamanız>/api/snapshot | jq '.quality, .index.changePct, .inde
 
 - `/api/health` **her zaman 200** döner (süreç ayakta olduğu sürece). Veri
   hazırlığı gövdedeki `ready` alanında; birkaç saniye içinde `true` olmalı.
-- `quality.source == "yahoo"` → canlı veri akıyor.
+- `quality.source == "yahoo"` → hızlı yol (v7 toplu kotasyon) çalışıyor.
+  `"yahoo-chart"` → crumb ucu kısıtlamış, crumb'sız chart yoluna düşülmüş;
+  veri yine canlı, sadece daha maliyetli.
 - `quality.weightsSource == "invesco"` → gerçek ağırlıklar okundu.
   `"bundled-approx"` görüyorsanız Invesco'ya erişilememiş; site çalışır ama
   ağırlıklar yaklaşıktır ve UI bunu söyler.
@@ -176,9 +178,12 @@ açık `+/−` işaretleri ve her grafiğin tablo ikizi eşlik ediyor.
 
 ## Bilinen sınırlar
 
-- **Yahoo resmî olmayan bir API.** Katmanlı yedekler var (crumb düşerse v8
-  chart yolu, ağırlık kaynağı düşerse önbellek → seed), ama kalıcı çözüm
-  anahtarlı bir sağlayıcı olurdu.
+- **Yahoo resmî olmayan bir API ve paylaşımlı IP'lerde kısıtlıyor.** Railway'in
+  çıkış IP'si çok kullanıldığı için `v1/test/getcrumb` ucu `429` dönebiliyor.
+  Bu durumda sistem **crumb'sız `v8/chart` yoluna** düşüyor: tek çağrıdan hem
+  baz hem güncel fiyat çıkıyor, `quality.source` `"yahoo-chart"` oluyor ve
+  crumb ucu 30 dakika elleniyor. Maliyeti yüksek (sembol başına bir istek)
+  ama site karanlıkta kalmıyor. Kalıcı çözüm anahtarlı bir sağlayıcı olurdu.
 - **`data/holdings.seed.json` kullanıcı tarafından sağlanan bir anlık
   görüntüden üretildi** (`data/ndx-components.tsv`, 10 Ağustos 2026). Ağırlık
   toplamı %100,01 çıkıyor. Invesco'ya erişilebildiğinde tamamen değiştirilir.

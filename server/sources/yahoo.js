@@ -90,7 +90,10 @@ async function handshake() {
 
 async function ensureSession() {
   if (session && Date.now() - session.at < CRUMB_TTL_MS) return session;
-  return handshake();
+  // El sikismasi withRetry ICINDE olmali. Disarida kaldiginda 429 aninda
+  // pes ediyordu (uretimde 53 ms'de) — oysa 429 tam olarak beklenip yeniden
+  // denenmesi gereken hata.
+  return withRetry(() => handshake(), { tries: 3, label: 'crumb' });
 }
 
 /* ------------------------------------------------------------------ */
@@ -220,6 +223,104 @@ export async function fetchBaseline(symbol, sessionStartUtc) {
     }
   }
   return null;
+}
+
+/**
+ * CRUMB'SIZ TAM YOL. Tek bir chart cagrisindan hem bazi hem guncel fiyati
+ * hem de acilis fiyatini cikarir.
+ *
+ * Bu, crumb el sikismasi 429 yedigi zamanki yedek yol. v8/chart crumb
+ * gerektirmiyor, o yuzden getcrumb hiz sinirindan bagimsiz calisabiliyor.
+ * Maliyeti yuksek (sembol basina bir istek) ama site karanlikta kalmiyor.
+ *
+ * @param {string} symbol
+ * @param {number} sessionStartUtc
+ * @param {number|null} regOpenUtc bugunun ana seans acilisi (bosluk ayrimi icin)
+ */
+export async function fetchChartSeries(symbol, sessionStartUtc, regOpenUtc = null) {
+  const url = `${Q2}/v8/finance/chart/${encodeURIComponent(symbol)}` +
+    `?range=5d&interval=5m&includePrePost=true`;
+
+  const json = await withRetry(async () => {
+    const res = await fetchWithTimeout(url, {
+      timeoutMs: 12_000,
+      headers: { Cookie: cookieHeader() },
+    });
+    assertOk(res, url);
+    return res.json();
+  }, { label: `chart:${symbol}` });
+
+  const r = json?.chart?.result?.[0];
+  const ts = r?.timestamp;
+  const close = r?.indicators?.quote?.[0]?.close;
+  if (!Array.isArray(ts) || !Array.isArray(close)) return null;
+
+  const cutoff = Math.floor(sessionStartUtc / 1000);
+  const openCut = regOpenUtc == null ? null : Math.floor(regOpenUtc / 1000);
+
+  let baseline = null, baselineAt = null;
+  let price = null, priceAt = null, open = null;
+
+  for (let k = 0; k < ts.length; k++) {
+    const c = close[k];
+    if (!Number.isFinite(c) || c <= 0) continue;
+    if (ts[k] < cutoff) {
+      // Seanstan ONCEKI son gecerli bar bazdir (kosul `<`, `<=` degil).
+      baseline = c;
+      baselineAt = ts[k] * 1000;
+    } else {
+      price = c;
+      priceAt = ts[k] * 1000;
+      if (openCut != null && open === null && ts[k] >= openCut) open = c;
+    }
+  }
+
+  // meta.regularMarketPrice 5 dakikalik bardan daha taze olabiliyor.
+  const mt = r?.meta?.regularMarketTime;
+  const mp = r?.meta?.regularMarketPrice;
+  if (Number.isFinite(mp) && mp > 0 && Number.isFinite(mt)) {
+    const mAt = mt * 1000;
+    if (mAt >= sessionStartUtc && (priceAt == null || mAt > priceAt)) {
+      price = mp;
+      priceAt = mAt;
+    }
+  }
+
+  return {
+    baseline, baselineAt, price, priceAt, open,
+    prevClose: r?.meta?.chartPreviousClose ?? r?.meta?.previousClose ?? null,
+  };
+}
+
+/**
+ * Crumb'siz yol, tum semboller icin.
+ * @param {string[]} symbols
+ * @param {number} sessionStartUtc
+ * @param {number|null} regOpenUtc
+ */
+export async function fetchChartAll(symbols, sessionStartUtc, regOpenUtc = null) {
+  const t0 = Date.now();
+  // Crumb yolu zaten hiz sinirina takildigi icin buraya gelindi — daha
+  // temkinli bir havuz ve daha genis aralik kullan.
+  const settled = await pool(
+    symbols, 4,
+    (sym) => fetchChartSeries(sym, sessionStartUtc, regOpenUtc),
+    { spacingMs: 250 }
+  );
+
+  /** @type {Map<string, any>} */
+  const out = new Map();
+  const failed = [];
+  settled.forEach((r, i) => {
+    if (r.status === 'fulfilled' && r.value) out.set(symbols[i], r.value);
+    else failed.push(symbols[i]);
+  });
+
+  log.info('chart-only yol tamamlandi', {
+    ok: out.size, basarisiz: failed.length, ms: Date.now() - t0,
+    eksik: failed.slice(0, 10),
+  });
+  return { series: out, failed };
 }
 
 /**
