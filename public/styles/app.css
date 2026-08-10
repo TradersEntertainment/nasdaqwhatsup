@@ -605,3 +605,28 @@ details.method code {
   white-space: nowrap;
 }
 .earn-sym b { color: var(--ink); font-weight: 640; }
+
+.win-quiet {
+  padding: 20px 0 4px;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.65;
+}
+.win-quiet p { margin-bottom: 8px; }
+.win-quiet b { color: var(--ink); font-weight: 640; }
+.win-jump {
+  appearance: none;
+  margin-top: 6px;
+  border: 1px solid rgba(168, 240, 60, 0.4);
+  background: var(--up-dim);
+  color: var(--ink);
+  border-radius: var(--r-pill);
+  padding: 9px 16px;
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 620;
+  cursor: pointer;
+  min-height: 40px;
+}
+.win-jump:hover { border-color: var(--up); }
+.win-jump:focus-visible { outline: 2px solid var(--up); outline-offset: 2px; }

@@ -72,15 +72,35 @@ export async function init(nowMs = Date.now()) {
   return frames.length;
 }
 
+/** En son banda yazilan gozlemin kaynak-zaman damgasi. */
+let lastObservedAt = 0;
+
 /**
- * Yeni kare ekle. Ayni ana denk gelen tekrar kare YAZILMAZ (aciliсtaki
- * hizli+rafine cift turu banda iki ayni kare koymasin).
+ * Yeni kare ekle.
+ *
+ * ⚠ EN ONEMLI KURAL: bir kare GERCEK BIR GOZLEMI temsil etmeli. Kaynak
+ * onbellekten cevap verdiyse piyasayi o anda GOZLEMLEMEDIK — o veriyle kare
+ * yazmak, pencerelere "hicbir sey degismedi" diye yalan soyletir.
+ *
+ * Uretimde tam bu oldu: seans canli degilken kaynak TTL'i 15 dakikaydi ama
+ * poller dakikada bir kare yaziyordu. 15 ozdes kare → "1 dk" ve "5 dk"
+ * pencereleri daima %0,00; "15 dk" ise iki ayri cekimin arasina dustugu icin
+ * calisiyordu. Fiyatlar donmus degildi, ONBELLEK donmustu.
+ *
+ * `observedAt` degismediyse kare atlanir: bant seyrekleşir ama her karesi
+ * gercektir ve pencere "yaklasik" olarak isaretlenir.
  *
  * @param {{symbol: string, price: number}[]} rows
  * @param {number} nowMs
  * @param {string} tsiDay
+ * @param {number} [observedAt] kaynagin veriyi GERCEKTEN cektigi an
  */
-export async function push(rows, nowMs, tsiDay) {
+export async function push(rows, nowMs, tsiDay, observedAt = nowMs) {
+  if (observedAt && observedAt === lastObservedAt) {
+    log.debug('bant karesi atlandi — kaynak onbellekten geldi', { observedAt });
+    return;
+  }
+  lastObservedAt = observedAt;
   /** @type {Record<string, number>} */
   const p = {};
   for (const r of rows) {
@@ -120,4 +140,5 @@ export function info(nowMs = Date.now()) {
 /** Testler icin. */
 export function _reset(next = []) {
   frames = next;
+  lastObservedAt = 0;
 }

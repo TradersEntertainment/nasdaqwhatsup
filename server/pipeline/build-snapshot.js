@@ -144,6 +144,8 @@ export function buildSnapshot({
       weightsSource: quality.weightsSource ?? null,
       weightsAsOf: quality.weightsAsOf ?? null,
       missing: quality.missing ?? [],
+      // Hangi semboller 7/24 perp fiyatiyla kaplandi — arayuz bunu soyler.
+      overlay: quality.overlay ?? null,
       dropped: m.dropped,
       consecutiveFailures: quality.consecutiveFailures ?? 0,
       clockPinned: quality.clockPinned ?? false,

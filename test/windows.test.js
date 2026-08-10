@@ -162,3 +162,39 @@ test('buildWindows: bos bant her pencereyi null yapar, patlamaz', () => {
   const w = buildWindows({ frames: [], rows, nowMs: T, ndxBase: 0 });
   assert.deepEqual(Object.values(w), [null, null, null, null, null]);
 });
+
+test('yuvarlama artigi hareket sayilmaz (bant 4 hane, fiyat tam hassasiyet)', () => {
+  // Bant 226,4012 kaydetmis; guncel fiyat 226,40123456 — AYNI baski.
+  const a = windowAttribution({
+    rows: [{ symbol: 'A', shares: 100, price: 226.40123456 },
+           { symbol: 'B', shares: 100, price: 100.00004 }],
+    past: new Map([['A', 226.4012], ['B', 100]]),
+    ndxBase: 0,
+  });
+  assert.equal(a.flat, 2, 'iki hisse de kipirdamamis sayilmali');
+  assert.equal(a.up, 0);
+  assert.equal(a.down, 0);
+});
+
+test('gercek bir kurus hareketi hala yakalanir', () => {
+  const a = windowAttribution({
+    rows: [{ symbol: 'A', shares: 100, price: 226.41 }],
+    past: new Map([['A', 226.40]]),
+    ndxBase: 0,
+  });
+  assert.equal(a.up, 1);
+  assert.equal(a.flat, 0);
+});
+
+test('hepsi kipirdamadiysa endeks TAM sifir (sahte kirmizi ok yok)', () => {
+  const a = windowAttribution({
+    rows: [{ symbol: 'A', shares: 100, price: 226.40123456 },
+           { symbol: 'B', shares: 300, price: 99.999982 }],
+    past: new Map([['A', 226.4012], ['B', 100]]),
+    ndxBase: 20000,
+  });
+  assert.equal(a.changePct, 0);
+  assert.equal(a.changePts, 0);
+  assert.equal(a.carriers.length, 0);
+  assert.equal(a.draggers.length, 0);
+});

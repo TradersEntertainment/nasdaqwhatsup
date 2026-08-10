@@ -74,6 +74,14 @@ export const config = {
   equityDexes: (process.env.EQUITY_DEXES || 'xyz')
     .split(',').map((s) => s.trim()).filter(Boolean),
 
+  /**
+   * Hisse perp'leriyle CANLI KAPLAMA. Hisse veri kaynaklari ABD borsasi
+   * kapaliyken donuyor (gecenin 8 saati + tum hafta sonu); perp'ler 7/24
+   * tikliyor. Kapsanan semboller icin fiyat VE baz perp piyasasindan alinir.
+   * Sorun cikarsa HL_OVERLAY=0 ile kapatilir.
+   */
+  hlOverlay: bool(process.env.HL_OVERLAY, true),
+
   logLevel: process.env.LOG_LEVEL || 'info',
 
   /** Veriyi "bayat" saymaya baslama esigi (UI rozeti icin). */

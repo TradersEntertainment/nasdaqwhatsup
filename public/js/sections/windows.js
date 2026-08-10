@@ -12,8 +12,14 @@
 import { renderBars } from '../charts/bars.js';
 import { pct, pts, int, pctPlain, tone, arrow } from '../format.js';
 
-/** Kullanicinin sectigi pencere sayfada kalici. */
-let selected = 'm15';
+/**
+ * Secili pencere. Baslangicta null: ilk boyamada HAREKETI OLAN en kisa
+ * pencere secilir. Sabit bir varsayilan ("15 dk"), o pencerede hic baski
+ * yoksa kullaniciyi olu bir ekranla karsilastiriyordu.
+ */
+let selected = null;
+/** Kullanici bir cipe bastiysa secim artik ona ait — otomatik degistirilmez. */
+let userPicked = false;
 
 const ORDER = ['m1', 'm5', 'm15', 'h1', 'h4'];
 
@@ -61,9 +67,10 @@ export function renderWindows(host, snap) {
     return;
   }
 
-  // Secili pencere kapandiysa (ornegin yeniden baslatma sonrasi 4 sa yok)
-  // en uzun MEVCUT pencereye dus — kullanici bos ekranla karsilasmasin.
-  if (!w[selected]) selected = available[available.length - 1];
+  // Secim: kullanici sectiyse ona dokunma. Aksi halde hareketi olan en kisa
+  // pencereyi sec — seans disinda 1 dk cogu zaman olu, 1 saat doludur.
+  if (!selected || !w[selected]) selected = pickDefault(w, available);
+  else if (!userPicked && movers(w[selected]) === 0) selected = pickDefault(w, available);
   const cur = w[selected];
 
   // Baslik secili pencereye gore konusur. Sabit bir baslik ("Son ne tasidi?")
@@ -112,17 +119,64 @@ export function renderWindows(host, snap) {
     btn.addEventListener('click', () => {
       if (btn.hasAttribute('disabled')) return;
       selected = /** @type {string} */ (btn.getAttribute('data-win'));
+      userPicked = true;
       renderWindows(host, snap);
     });
   }
 
+  const bars = /** @type {HTMLElement} */ (host.querySelector('#win-bars'));
+  if (movers(cur) === 0) {
+    // Bos cubuk grafigi yerine SEBEP. Onceki halde gunluk grafigin bos mesaji
+    // ("Bu seansta katki uretecek hareket yok") pencere baglamina sizmisti.
+    bars.innerHTML = quietBlock(cur, snap, w, available);
+    const jump = bars.querySelector('[data-jump]');
+    jump?.addEventListener('click', () => {
+      selected = /** @type {string} */ (jump.getAttribute('data-jump'));
+      userPicked = true;
+      renderWindows(host, snap);
+    });
+    return;
+  }
+
   // Cubuklar gunluk katkiyla AYNI bilesenden ciziliyor: ayni gorsel dilbilgisi,
   // ayni ipucu, ayni renk kutupsalligi. Pencere yalnizca bazi degistiriyor.
-  renderBars(
-    /** @type {HTMLElement} */ (host.querySelector('#win-bars')),
-    [...cur.carriers, ...cur.draggers],
-    { perSide: host.clientWidth < 560 ? 6 : 8 }
-  );
+  renderBars(bars, [...cur.carriers, ...cur.draggers],
+    { perSide: host.clientWidth < 560 ? 6 : 8 });
+}
+
+/** Bir pencerede fiyati kipirdayan hisse sayisi. */
+const movers = (d) => (d ? d.up + d.down : 0);
+
+/** Hareketi olan en kisa pencere; hicbirinde yoksa en uzunu. */
+function pickDefault(w, available) {
+  for (const k of available) if (movers(w[k]) > 0) return k;
+  return available[available.length - 1];
+}
+
+/**
+ * Hicbir hissenin kipirdamadigi pencere. Bu NORMAL bir durum (piyasa kapali,
+ * ya da seans disi baskilar seyrek) — hata gibi gorunmemeli, ve kullaniciya
+ * hareketin OLDUGU pencereye tek dokunusla gecis onerilmeli.
+ */
+function quietBlock(cur, snap, w, available) {
+  const dolu = available.filter((k) => movers(w[k]) > 0);
+  const oneri = dolu[0];
+  const kapali = !snap.session?.live;
+
+  return `<div class="win-quiet">
+    <p><b>${int(cur.n)} hissenin tamamı aynı fiyatta</b> — son
+      ${spanText(cur.actualMs)} içinde hiçbirinde yeni işlem baskısı olmamış.</p>
+    <p>${kapali
+      ? `Piyasa şu an kapalı (${snap.session?.label ?? 'seans dışı'}). Fiyatlar
+         seans açılınca hareket etmeye başlar.`
+      : 'Seans dışı işlemler seyrek olabiliyor; kısa pencerelerde çoğu hisse hiç baskı görmez.'}
+    </p>
+    ${oneri
+      ? `<button type="button" class="win-jump" data-jump="${oneri}">
+           ${label(oneri)} penceresinde hareket var → göster
+         </button>`
+      : '<p>Hiçbir pencerede hareket yok.</p>'}
+  </div>`;
 }
 
 function label(k) {
@@ -187,9 +241,10 @@ function verdictLine(cur) {
 
 /** Yeniden boyutlandirmada cubuklar yeniden olculsun diye disari acildi. */
 export function repaintWindowBars(host, snap) {
-  const cur = snap.windows?.[selected];
+  const cur = selected ? snap.windows?.[selected] : null;
   const el = host.querySelector('#win-bars');
-  if (cur && el) {
+  // Sessiz pencerede cubuk yok; aciklama blogu yeniden olculmeye ihtiyac duymaz.
+  if (cur && el && movers(cur) > 0) {
     renderBars(/** @type {HTMLElement} */ (el), [...cur.carriers, ...cur.draggers],
       { perSide: host.clientWidth < 560 ? 6 : 8 });
   }

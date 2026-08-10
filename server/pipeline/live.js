@@ -298,9 +298,10 @@ async function tryTradingView(weights, startUtc, nowUtc, st) {
   const symbols = weights.holdings.map((h) => h.s);
 
   let map = tvCache.map;
-  // 30 sn: poll kadansi 60 sn oldugu icin canli seansta her tur TAZE veri
-  // ister; 60 sn'lik TTL sinirda kalip bazen bayat kare yaziyordu.
-  const ttl = st.live ? 30_000 : 15 * 60_000;
+  // TTL, poll kadansini (60 sn) ASLA cok asmamali: banda yazilan her kare
+  // gercek bir gozlem olmali. Eski 15 dakikalik "seans disi" TTL'i, 1 dk ve
+  // 5 dk pencerelerini kalici olarak %0,00'a kilitliyordu.
+  const ttl = st.live ? 30_000 : 3 * 60_000;
   if (!map || nowUtc - tvCache.at > ttl) {
     try {
       // QQQ da istenir: ucretsiz uclarin hicbiri ^NDX vermiyor, QQQ resmi
@@ -354,6 +355,8 @@ async function tryTradingView(weights, startUtc, nowUtc, st) {
     rows,
     ndxBase,
     nowUtc,
+    // Bant bu damgayla tekrar kare yazmaktan kacinir.
+    observedAt: tvCache.at,
     officialRegularPct: Number.isFinite(qqq?.change) ? qqq.change : null,
     officialRegularLevel: null,
     quality: {
@@ -363,6 +366,100 @@ async function tryTradingView(weights, startUtc, nowUtc, st) {
       missing: symbols.filter((s) => !rows.some((r) => r.symbol === s)),
       warnings,
     },
+  } };
+}
+
+
+/* ---------- Hyperliquid CANLI KAPLAMA (7/24) ---------- */
+
+/**
+ * Hisse perp fiyatlariyla canli kaplama.
+ *
+ * SORUN: TradingView/nasdaq.com hisse verisi ABD borsasi kapaliyken DONAR.
+ * TSI gunun 8 saati (gece) ve tum hafta sonu boyunca hicbir fiyat degismez;
+ * site "101 hisse kipirdamadi" der ve olu gorunur. Bu dogru ama ise yaramaz.
+ *
+ * COZUM: Hyperliquid'in HIP-3 `xyz` dex'indeki hisse perp'leri 7/24 islem
+ * goruyor. Kapsadigi semboller icin fiyat VE baz oradan alinir.
+ *
+ * Neden hem fiyat hem baz: getiri `fiyat/baz` oldugu icin ikisinin AYNI
+ * piyasadan gelmesi sart. Perp fiyatini spot baza bolmek, iki piyasa
+ * arasindaki taban farkini "gunluk hareket" diye gosterirdi.
+ *
+ * Neden her fazda (yalniz gece degil): kaynak faz sinirinda degisirse o
+ * sembolun fiyat serisi kirilir ve o ani kapsayan pencereler perp fiyatini
+ * spot fiyatla karsilastirip sacma bir getiri uretir. Tek bir sembol icin
+ * TEK bir piyasa — hep.
+ *
+ * Guvenlik: ad cakismasi araligi (ayni kisaltmali coin), akil disi getiri
+ * siniri ve sembol basina "ikisi de var mi" kontrolu. Biri bile tutmazsa o
+ * sembol dokunulmadan birakilir.
+ *
+ * @param {any[]} rows birincil kaynaktan gelen satirlar (YERINDE degistirilmez)
+ * @param {number} startUtc
+ * @param {number} nowUtc
+ */
+async function applyHlOverlay(rows, startUtc, nowUtc) {
+  if (!config.hlOverlay) return { rows, overlay: null };
+
+  const map = await getCryptoMap(rows.map((r) => r.symbol));
+  if (!map?.venue || Object.keys(map.entries).length === 0) {
+    return { rows, overlay: { venue: null, count: 0, reason: map?.note ?? 'eslesen piyasa yok' } };
+  }
+
+  let prices;
+  try {
+    prices = await fetchCryptoPrices(/** @type {any} */ (map.venue), map.entries);
+  } catch (err) {
+    log.debug('kaplama fiyatlari alinamadi', { err: String(err?.message ?? err) });
+    return { rows, overlay: { venue: map.venue, count: 0, reason: 'fiyat alinamadi' } };
+  }
+
+  const baselines = await getCryptoBaselines(/** @type {any} */ (map), startUtc);
+  const ref = getRefPrices();
+
+  let count = 0, collision = 0, insane = 0, noBase = 0;
+  const out = rows.map((r) => {
+    const pm = prices.get(r.symbol);
+    const b = baselines.get(r.symbol);
+    if (!pm || !(pm.price > 0)) return r;
+
+    // 1) Ad cakismasi: ayni kisaltmayi tasiyan bir COIN olabilir.
+    const rp = ref.get(r.symbol);
+    if (rp > 0 && (pm.price / rp < 0.2 || pm.price / rp > 5)) { collision++; return r; }
+
+    // 2) Baz: TSI seans basindaki perp fiyati. Yoksa kaplama yapilmaz —
+    //    perp fiyatini spot baza bolmek en tehlikeli hata olurdu.
+    const base = b?.baseline;
+    if (!(base > 0)) { noBase++; return r; }
+
+    // 3) Akil disi getiri: hisse perp'i bir seansta %35 oynamaz; oynadiysa
+    //    muhtemelen yanlis piyasa ya da bozuk mum.
+    const chg = pm.price / base - 1;
+    if (!Number.isFinite(chg) || Math.abs(chg) > 0.35) { insane++; return r; }
+
+    count++;
+    return {
+      ...r,
+      baseline: base,
+      price: pm.price,
+      // Perp'ler surekli islem gorur — "islem yok" kovasina dusmemeliler.
+      lastTradeAtUtc: nowUtc,
+      baselineAtUtc: b.at ?? null,
+      baselineSource: `hl-perp(${b.source})`,
+      // Perp fiyat serisi spot acilisiyla ayni seyi ifade etmiyor.
+      open: null,
+    };
+  });
+
+  if (count === 0) {
+    return { rows, overlay: { venue: map.venue, count: 0,
+      reason: `cakisma:${collision} bazsiz:${noBase} akildisi:${insane}` } };
+  }
+  log.info('hl kaplamasi', { venue: map.venue, kaplanan: count, cakisma: collision, bazsiz: noBase });
+  return { rows: out, overlay: {
+    venue: map.venue, count, total: rows.length,
+    symbols: out.filter((r) => r.baselineSource?.startsWith('hl-perp')).map((r) => r.symbol),
   } };
 }
 
@@ -381,7 +478,7 @@ let nasdaqCache = { at: 0, rows: null };
  */
 async function tryNasdaq(weights, nowUtc, st) {
   let rows = nasdaqCache.rows;
-  const ttl = st.live ? 30_000 : 30 * 60_000;
+  const ttl = st.live ? 30_000 : 3 * 60_000;
   if (!rows || nowUtc - nasdaqCache.at > ttl) {
     try {
       const r = await fetchNasdaq100();
@@ -426,6 +523,7 @@ async function tryNasdaq(weights, nowUtc, st) {
     rows: built,
     ndxBase,
     nowUtc,
+    observedAt: nasdaqCache.at,
     officialRegularPct: null,
     officialRegularLevel: null,
     quality: {
@@ -436,6 +534,40 @@ async function tryNasdaq(weights, nowUtc, st) {
       warnings,
     },
   } };
+}
+
+/**
+ * Birincil (hisse) kaynagin sonucuna HL kaplamasini uygular ve sonucu
+ * `quality` icinde gorunur kilar. Kaplama basarisiz olursa ham sonuc aynen
+ * doner — kaplama bir IYILESTIRME, bagimlilik degil.
+ *
+ * @param {any} raw
+ * @param {number} startUtc
+ * @param {number} nowUtc
+ */
+async function withOverlay(raw, startUtc, nowUtc) {
+  try {
+    const { rows, overlay } = await applyHlOverlay(raw.rows, startUtc, nowUtc);
+    if (!overlay?.count) {
+      return { ...raw, quality: { ...raw.quality, overlay: overlay ?? null } };
+    }
+    return {
+      ...raw,
+      rows,
+      // Kaplanmis satirlarin fiyati her poll'da degisiyor; kaynak onbellegi
+      // artik "gozlem tazeligi" olcusu degil. Bant her turu kaydetmeli.
+      observedAt: nowUtc,
+      quality: {
+        ...raw.quality,
+        source: `${raw.quality.source}+hl`,
+        overlay,
+        warnings: [...(raw.quality.warnings ?? []), 'hl-overlay'],
+      },
+    };
+  } catch (err) {
+    log.warn('hl kaplamasi atlandi', { err: String(err?.message ?? err) });
+    return raw;
+  }
 }
 
 /** Kucuk yardimci: nasdaq yolu startUtc'yi disaridan almiyor. */
@@ -506,6 +638,7 @@ async function tryFinnhub(weights, startUtc, nowUtc, st) {
     rows,
     ndxBase,
     nowUtc,
+    observedAt: finnhubCache.at,
     officialRegularPct: qqq?.dp ?? null,
     officialRegularLevel: null,
     quality: {
@@ -773,7 +906,7 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   //    disi da dahil" gereksinimini karsilayan tek anahtarsiz kaynak.
   {
     const tv = await tryTradingView(weights, startUtc, nowUtc, st);
-    if (tv.ok) return tv.raw;
+    if (tv.ok) return withOverlay(tv.raw, startUtc, nowUtc);
     why.push(tv.reason);
   }
 
@@ -781,7 +914,7 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   //    User-Agent'i sart; UA'siz istek 403 aliyor.
   {
     const nd = await tryNasdaq(weights, nowUtc, st);
-    if (nd.ok) return nd.raw;
+    if (nd.ok) return withOverlay(nd.raw, startUtc, nowUtc);
     why.push(nd.reason);
   }
 

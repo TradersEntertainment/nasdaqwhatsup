@@ -86,6 +86,13 @@ function paintChrome() {
   if (q.weightsSource === 'bundled-approx' || q.weightsSource === 'fallback') {
     warns.push('Ağırlıklar <b>yaklaşık</b> — canlı kaynak henüz okunamadı.');
   }
+  if (q.overlay?.count > 0) {
+    warns.push(
+      `<b>${int(q.overlay.count)}</b> hissenin fiyatı <b>Hyperliquid</b> perp ` +
+      `piyasasından — bu yüzden ABD borsası kapalıyken de canlı. Perp fiyatı ` +
+      `spot fiyattan bir miktar sapabilir.`
+    );
+  }
   if (q.warnings?.includes('stooq-delayed')) {
     warns.push('Veri kaynağı <b>stooq</b> — fiyatlar ~15 dk gecikmeli olabilir.');
   }

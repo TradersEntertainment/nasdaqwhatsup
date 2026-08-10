@@ -97,7 +97,7 @@ export async function runOnce(reason = 'manual', { fast = false } = {}) {
     store.set(snapshot);
     // Bant anlik goruntu YAYINLANDIKTAN sonra beslenir: degismez kontrolunden
     // gecmemis bir fiyat seti pencere gecmisini kirletmesin.
-    await tape.push(raw.rows, snapshot.generatedAtMs, snapshot.tsiDay);
+    await tape.push(raw.rows, snapshot.generatedAtMs, snapshot.tsiDay, raw.observedAt);
     // Hizli gecis gercek bazlari cekmedi; bayragi DUSURME, rafine tur yapsin.
     if (!fast) needBaselineRefresh = false;
     if (!snapshot.coverage?.partial) await history.recordIntraday(snapshot);

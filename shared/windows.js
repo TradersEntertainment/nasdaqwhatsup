@@ -29,6 +29,13 @@ export const WINDOWS = [
 export const MAX_WINDOW_MS = Math.max(...WINDOWS.map((w) => w.ms));
 
 /**
+ * Bandin fiyat hassasiyeti (server/pricetape.js `toFixed(4)` ile AYNI olmali).
+ * "Degisti mi?" karari bu olcekte veriliyor; aksi halde yuvarlama artigi
+ * hareket gibi sayiliyor.
+ */
+export const TAPE_SCALE = 1e4;
+
+/**
  * Hedef ana en yakin GECMIS kareyi secer.
  *
  * Kural: `t <= now − Δt` olan EN YENI kare. Boylece pencere istenenden kisa
@@ -97,7 +104,12 @@ export function windowAttribution({ rows, past, ndxBase = 0, topN = 8 }) {
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const w = weights[i];
-    const r = it.price / it.baseline - 1;
+    // Bandin kaydettigi hassasiyette degismediyse getiri TAM SIFIR sayilir —
+    // yalnizca kova sayimi icin degil, katkinin kendisi icin de. Aksi halde
+    // 101 hissenin tamami kipirdamamisken endeks "−%0,000" cikip kirmizi ok
+    // gosteriyordu.
+    const changed = Math.round(it.price * TAPE_SCALE) !== Math.round(it.baseline * TAPE_SCALE);
+    const r = changed ? it.price / it.baseline - 1 : 0;
     const contribPp = w * r * 100;
 
     idxWr += w * r;
@@ -107,9 +119,9 @@ export function windowAttribution({ rows, past, ndxBase = 0, topN = 8 }) {
     // Pencere icinde "islem gordu mu" sorusunu ancak fiyat degisiminden
     // cevaplayabiliyoruz — anlik goruntu kaynaklari sembol basina zaman
     // damgasi vermiyor. Bu yuzden kova adi "kipirdamadi", "islem yok" degil.
-    if (r > 0) up++;
-    else if (r < 0) down++;
-    else flat++;
+    if (!changed) flat++;
+    else if (r > 0) up++;
+    else down++;
 
     list.push({
       s: it.symbol, n: it.name, sector: it.sector,

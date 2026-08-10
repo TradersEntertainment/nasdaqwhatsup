@@ -120,6 +120,9 @@ export function fixtureInfo() {
  * @returns {{t: number, p: Record<string, number>}[]}
  */
 export function fixtureTape(rows, nowUtc) {
+  // FIXTURE_TAPE_FROZEN=1: son 5 dakikanin kareleri AYNI fiyatta olsun.
+  // Uretimde gorulen "1 dk ve 5 dk olu, 15 dk dolu" durumunu agsiz uretir.
+  const frozen = process.env.FIXTURE_TAPE_FROZEN === '1';
   const cap = config.fixtureTapeMin;
   const OFFSETS_MIN = [245, 240, 62, 60, 16, 15, 6, 5, 2, 1]
     .filter((m) => !cap || m <= cap);
@@ -139,9 +142,9 @@ export function fixtureTape(rows, nowUtc) {
       const i = rank.get(r.symbol) ?? 999;
       const rnd = jitter(i * 7919 + min * 104729)();
       // Dakika basina drift: ilk 8 isim pozitif, gerisi agirlikli olarak negatif.
-      const perMin = i < 8
+      const perMin = frozen && min <= 5 ? 0 : (i < 8
         ? 0.00018 + rnd * 0.00022
-        : -0.00009 - rnd * 0.00011;
+        : -0.00009 - rnd * 0.00011);
       // Gecmis fiyat = simdiki / (1 + drift x dakika). Ileri degil GERI bakiliyor.
       p[r.symbol] = +(r.price / (1 + perMin * min)).toFixed(4);
     }
