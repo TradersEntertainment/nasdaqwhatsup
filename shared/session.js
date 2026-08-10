@@ -33,13 +33,13 @@ export const TSI_OFFSET_MS = 3 * HOUR_MS;
 
 /** @type {Record<SessionPhase, string>} */
 export const PHASE_LABELS_TR = {
-  CARRY_AFTER_HOURS: 'Onceki seansin uzatilmis islemleri',
-  OVERNIGHT: 'Piyasa kapali',
-  PRE: 'Acilis oncesi (pre-market)',
+  CARRY_AFTER_HOURS: 'Önceki seansın uzatılmış işlemleri',
+  OVERNIGHT: 'Piyasa kapalı',
+  PRE: 'Açılış öncesi (pre-market)',
   REGULAR: 'Ana seans',
-  AFTER_HOURS: 'Kapanis sonrasi (after-hours)',
+  AFTER_HOURS: 'Kapanış sonrası (after-hours)',
   WEEKEND: 'Hafta sonu',
-  HOLIDAY: 'Resmi tatil',
+  HOLIDAY: 'Resmî tatil',
 };
 
 /** @type {Record<SessionPhase, boolean>} */

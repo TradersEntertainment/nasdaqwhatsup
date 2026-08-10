@@ -1,1 +1,165 @@
-<h1>yukleniyor</h1>
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nasdaq'ı Kim Taşıyor?</title>
+<meta name="description" content="NASDAQ-100 endeksinin günlük hareketini hangi hisselerin taşıdığını gösteren pano. TSİ 00:00–24:00 seansı, seans dışı işlemler dahil.">
+<meta name="theme-color" content="#0b0e0c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23a8f03c'/%3E%3Cpath d='M8 22V10l7 8V10M19 10v12h5' stroke='%230b0e0c' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/styles/tokens.css">
+<link rel="stylesheet" href="/styles/app.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">N</div>
+      <div>
+        <h1>Nasdaq'ı Kim Taşıyor?</h1>
+        <p>NASDAQ-100 · katkı, genişlik ve ıraksama</p>
+      </div>
+    </div>
+    <span class="chip" id="chip-session"><span class="dot"></span><span>—</span></span>
+    <span class="chip" id="chip-reset">—</span>
+    <span class="chip" id="chip-age">—</span>
+  </header>
+
+  <div id="banner"></div>
+  <div id="last-session"></div>
+
+  <main class="bento">
+
+    <section class="card hero" id="hero" aria-label="Teşhis">
+      <p class="empty">Veri yükleniyor…</p>
+    </section>
+
+    <section class="card s8" aria-labelledby="h-carriers">
+      <div class="card-head">
+        <h2 id="h-carriers">Endeksi kim taşıyor</h2>
+        <span class="sub">her hissenin endeks hareketine kattığı puan</span>
+      </div>
+      <div id="carriers"></div>
+    </section>
+
+    <section class="card s4" aria-labelledby="h-conc">
+      <div class="card-head">
+        <h2 id="h-conc">Konsantrasyon</h2>
+      </div>
+      <div id="concentration"></div>
+    </section>
+
+    <section class="card s6" aria-labelledby="h-breadth">
+      <div class="card-head">
+        <h2 id="h-breadth">Sayı mı, ağırlık mı?</h2>
+        <span class="sub">aynı piyasa, iki farklı ölçü</span>
+      </div>
+      <div id="breadth"></div>
+    </section>
+
+    <section class="card s6" aria-labelledby="h-div">
+      <div class="card-head">
+        <h2 id="h-div">Gün içi ıraksama</h2>
+        <span class="sub">ağırlıklı endeks vs eşit ağırlıklı</span>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--series-cap)"></i>Piyasa değeri ağırlıklı (endeks)</span>
+        <span><i style="background:var(--series-eq)"></i>Eşit ağırlıklı (ortalama hisse)</span>
+      </div>
+      <div id="divergence"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-map">
+      <div class="card-head">
+        <h2 id="h-map">Ağırlık haritası</h2>
+        <span class="sub">kutu alanı = endeks ağırlığı · renk = günlük getiri</span>
+      </div>
+      <div id="heatmap"></div>
+      <div class="scale-legend">
+        <span>−%3</span>
+        <div class="scale-ramp" id="ramp"></div>
+        <span>+%3</span>
+        <span style="margin-left:8px">tam değerler aşağıdaki tabloda</span>
+      </div>
+    </section>
+
+    <section class="card s6" aria-labelledby="h-cf">
+      <div class="card-head">
+        <h2 id="h-cf">Taşıyıcıları çıkarırsak</h2>
+        <span class="sub">kalan ağırlıklar yeniden normalize edilir</span>
+      </div>
+      <div id="counterfactual"></div>
+    </section>
+
+    <section class="card s6" aria-labelledby="h-board">
+      <div class="card-head">
+        <h2 id="h-board">Son 30 seansın taşıyıcıları</h2>
+      </div>
+      <div id="leaderboard"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-table">
+      <div class="card-head">
+        <h2 id="h-table">Tüm hisseler</h2>
+        <span class="sub">başlığa tıklayarak sıralayın · ☆ ile takip listenize alın</span>
+      </div>
+      <div id="table"></div>
+    </section>
+
+    <section class="card">
+      <details class="method">
+        <summary>Yöntem — bu sayılar nasıl hesaplanıyor?</summary>
+        <div class="body">
+          <p><b>Seans tanımı.</b> Bir seans TSİ 00:00'dan 24:00'a kadar sürer ve
+          seans dışı (pre-market / after-hours) işlemler dahildir. Türkiye sabit
+          UTC+3 olduğu için TSİ gece yarısı her zaman 21:00 UTC'dir. Bu sınır
+          ABD'de <b>yazın 17:00 ET</b>'ye, <b>kışın 16:00 ET</b>'ye denk gelir —
+          yani kışın TSİ günü tam olarak kapanış-kapanış olurken, yazın pencere
+          bir saat after-hours'a kayar.</p>
+
+          <p><b>Baz fiyat.</b> Her hissenin bazı, TSİ gece yarısından
+          <i>kesinlikle önceki</i> son işlem baskısıdır — seans dışı baskılar
+          dahil.</p>
+
+          <p><b>Katkı.</b> NASDAQ-100 piyasa değeri ağırlıklı olduğundan
+          <code>endeks getirisi = Σ ağırlık × getiri</code> özdeşliği tam olarak
+          geçerlidir. Bir hissenin katkısı <code>wᵢ × rᵢ</code>; bütün katkılar
+          toplandığında endeksin hareketini birebir verir. <code>^NDX</code>
+          seans dışında tik atmadığı için TSİ seansının endeks hareketi bu
+          özdeşlikten sentezlenir — bu bir tahmin değil, endeksin kendi tanımıdır.</p>
+
+          <p><b>Resmî rakamla neden farklı?</b> Televizyondaki NDX yüzdesi yalnızca
+          ana seansı kapsar; buradaki rakam gece boşluğunu da içerir. İkisi de
+          hero panelinde yan yana gösteriliyor.</p>
+
+          <p><b>Eşit ağırlıklı endeks.</b> Bütün hisselerin getirilerinin düz
+          ortalaması. Gerçek endeksle arasındaki fark, hareketin ne kadar birkaç
+          hissede toplandığını gösterir — sitenin asıl cevabı bu sayıdır.</p>
+
+          <p><b>Taşıyıcıları çıkarma.</b> Seçilen hisseler çıkarıldıktan sonra
+          kalan ağırlıklar <i>yeniden normalize edilir</i>. Katkıları düpedüz
+          çıkarmak (naif yöntem) çıkarılan ağırlığı %0 getiriyle yerinde bırakır
+          ve etkiyi olduğundan küçük gösterir.</p>
+
+          <p><b>Genişlik.</b> Seans dışında işlem baskıları seyrektir; hiç baskı
+          görmemiş hisseler ayrı bir "işlem yok" kovasında tutulur ve yükselen /
+          düşen oranları yalnızca işlem görenler üzerinden hesaplanır.</p>
+
+          <p><b>Renkler.</b> Yükseliş/düşüş renkleri renk körlüğü simülasyonuyla
+          ölçülerek seçildi: klasik finans yeşili ile kırmızısı deuteranopide
+          neredeyse aynı renge düşüyor, lime'a kaydırılmış yeşil bu ayrımı üç
+          katına çıkarıyor. Ayrıca renk hiçbir yerde tek sinyal değil — konum,
+          ▲▼ okları ve açık işaretler eşlik ediyor.</p>
+        </div>
+      </details>
+    </section>
+
+  </main>
+
+  <p class="footer" id="footer"></p>
+</div>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>

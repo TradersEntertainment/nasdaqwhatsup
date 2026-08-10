@@ -19,13 +19,13 @@ export const MIN_TRADED = 20;
 
 /** @type {Record<Verdict, {title: string, tone: 'up'|'down'|'neutral'}>} */
 export const VERDICT_META = {
-  MASKED_WEAKNESS: { title: 'Endeksi birkac hisse tasiyor', tone: 'up' },
-  MASKED_STRENGTH: { title: 'Endeksi birkac hisse asagi cekiyor', tone: 'down' },
-  BROAD_RALLY: { title: 'Yukselis genise yayilmis', tone: 'up' },
-  BROAD_SELLOFF: { title: 'Satis genise yayilmis', tone: 'down' },
-  MIXED: { title: 'Karisik seyir', tone: 'neutral' },
+  MASKED_WEAKNESS: { title: 'Endeksi birkaç hisse taşıyor', tone: 'up' },
+  MASKED_STRENGTH: { title: 'Endeksi birkaç hisse aşağı çekiyor', tone: 'down' },
+  BROAD_RALLY: { title: 'Yükseliş genişe yayılmış', tone: 'up' },
+  BROAD_SELLOFF: { title: 'Satış genişe yayılmış', tone: 'down' },
+  MIXED: { title: 'Karışık seyir', tone: 'neutral' },
   FLAT: { title: 'Endeks yatay', tone: 'neutral' },
-  QUIET: { title: 'Islem yok denecek kadar az', tone: 'neutral' },
+  QUIET: { title: 'İşlem yok denecek kadar az', tone: 'neutral' },
 };
 
 /**

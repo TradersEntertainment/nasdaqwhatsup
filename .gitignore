@@ -5,8 +5,9 @@ node_modules/
 # Yerel volume taklidi (Railway'de RAILWAY_VOLUME_MOUNT_PATH kullanilir)
 .data/
 
-# Playwright ciktilari
-screenshots/
+# Playwright ciktilari (README kapagi haric)
+screenshots/*
+!screenshots/kapak.png
 
 # Isletim sistemi
 .DS_Store

@@ -103,6 +103,7 @@ export function buildSnapshot({
       missing: quality.missing ?? [],
       dropped: m.dropped,
       consecutiveFailures: quality.consecutiveFailures ?? 0,
+      clockPinned: quality.clockPinned ?? false,
       warnings,
     },
   };

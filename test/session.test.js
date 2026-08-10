@@ -175,6 +175,6 @@ test('sonraki faz zamani ileride ve etiketli', () => {
   const s = sessionState(tsi('2026-08-11', '18:00'));
   assert.equal(s.phase, 'REGULAR');
   assert.ok(s.nextPhaseAtUtc > tsi('2026-08-11', '18:00'));
-  assert.equal(s.nextPhaseLabel, 'Kapanis sonrasi (after-hours)');
+  assert.equal(s.nextPhaseLabel, 'Kapanış sonrası (after-hours)');
   assert.equal(s.resetAtUtc, sessionEndUtc(tsi('2026-08-11', '18:00')));
 });

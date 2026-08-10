@@ -1,0 +1,105 @@
+/*
+ * Tasarim token'lari.
+ *
+ * Bilincli olarak TEK MODLU koyu tema — bu bir piyasa panosu, referans tasarim
+ * koyu. Zeminler acikca boyaniyor, hicbir renk "devralinmiyor".
+ *
+ * RENK KARARLARI (dataviz doğrulayicisiyla olculdu, goz karariyla degil):
+ *
+ *  - Yukselis/dusus bir DIVERGING (kutupsallik) kodlamasi. Klasik finans
+ *    yesili #39D353 ile kirmizi #FF5C5C deuteranopide CVD ΔE 6.0'a dusuyor —
+ *    yani renk koru bir kullanici icin fiilen AYNI renk. Yesili lime'a
+ *    kaydirmak ayrimi ΔE 18.7'ye cikariyor. Istenen neon-lime estetigi ayni
+ *    zamanda erisilebilir olan secim.
+ *  - Iki kutbun parlaklik farki tesadufi degil: CVD'de ayrimi tasiyan sey o.
+ *    Ikisini ayni acikliga sikistirmak ΔE'yi 3.0'a dusuruyordu.
+ *  - Iraksama grafiginin iki serisi ise KATEGORIK (kimlik). Onlar alti
+ *    kontrolun hepsini geciyor: #6FA318 ↔ #3987E5, CVD ΔE 28.3.
+ *  - Renk hicbir yerde tek sinyal degil: konum (tasiyanlar sagda, cekenler
+ *    solda), acik +/- isareti ve ▲▼ oku her zaman esik ediyor.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Zeminler */
+  --bg: #0b0e0c;
+  --surface: #141815;
+  --surface-2: #1c221e;
+  --surface-3: #232a25;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.13);
+
+  /* Murekkep — metin ASLA seri rengi giymez */
+  --ink: #f1f4ee;
+  --ink-2: #a9b2a6;
+  --ink-muted: #6f7a70;
+
+  /* Grafik kromu — kesiksiz sac teli, kesikli asla */
+  --grid: #212722;
+  --baseline: #39413a;
+
+  /* Diverging kutuplar (kutupsallik) */
+  --up: #a8f03c;
+  --down: #ff5a5a;
+  --mid: #383835;
+  --up-dim: rgba(168, 240, 60, 0.16);
+  --down-dim: rgba(255, 90, 90, 0.16);
+
+  /* Kategorik (kimlik) — iraksama grafigi */
+  --series-cap: #6fa318;
+  --series-eq: #3987e5;
+
+  /* Durum */
+  --warn: #fab219;
+
+  /* Olculer */
+  --r-card: 20px;
+  --r-sm: 10px;
+  --r-pill: 999px;
+  --pad-card: 22px;
+  --gap: 14px;
+
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Hero rakami dahil her sey ayni sans; display/serif yok. */
+  --fs-hero: clamp(2.9rem, 9vw, 5rem);
+  --fs-big: clamp(1.6rem, 4.2vw, 2.3rem);
+  --fs-h: 0.82rem;
+  --fs-body: 0.94rem;
+  --fs-sm: 0.8rem;
+  --fs-xs: 0.72rem;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  /* Aksi halde tarayici varsayilani sizar. */
+  min-height: 100vh;
+}
+
+/* Buyuk rakamlarda orantili figurler: 121 gibi sayilar tabular ile gevsek durur.
+   tabular-nums yalnizca tablo satirlari ve eksen etiketlerinde. */
+.num-hero, .num-big { font-variant-numeric: proportional-nums; }
+.num-tab { font-variant-numeric: tabular-nums; }
+
+:focus-visible {
+  outline: 2px solid var(--up);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

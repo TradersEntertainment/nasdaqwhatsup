@@ -51,6 +51,9 @@ export async function runOnce(reason = 'manual') {
       quality: {
         ...raw.quality,
         consecutiveFailures: store.health().consecutiveFailures,
+        // Fixture modunda saat sabitlenmis olabilir; on yuz gercek saati
+        // kullanirsa faz ile saat celisir ve geri sayim 24 saati asar.
+        clockPinned: config.fixtureMode && config.fixturePinClock,
       },
       // Fixture'da varyantlar bilincli olarak eksik hisseli olabiliyor.
       minConstituents: config.fixtureMode ? 50 : 85,
@@ -66,6 +69,13 @@ export async function runOnce(reason = 'manual') {
     if (prev && prev.tsiDay !== snapshot.tsiDay) {
       await history.closeDay(prev);
       await storage.prune();
+    }
+
+    // Bu TSI gununde hic islem yoksa (hafta sonu / tatil / gece), son
+    // kapanmis seansi ilistir — kullanici sifir duvari yerine "dun kim
+    // tasidi" cevabini gorsun.
+    if (snapshot.index.breadth.traded === 0) {
+      snapshot.lastSession = await history.getLastClosedSession(snapshot.tsiDay);
     }
 
     store.set(snapshot);

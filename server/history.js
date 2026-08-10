@@ -81,6 +81,31 @@ export async function getIntraday(day) {
 }
 
 /**
+ * Verilen gunden ONCEKI en son kapanmis seans.
+ *
+ * Hafta sonu / tatil icin: kullanici siteye Pazar gunu girdiginde sifir duvari
+ * degil, "Cuma'yi kim tasidi" cevabini gormeli.
+ *
+ * @param {string} beforeDay TSI gunu (YYYY-MM-DD)
+ */
+export async function getLastClosedSession(beforeDay) {
+  const days = (await storage.listDays('daily')).filter((d) => d < beforeDay);
+  for (const day of days.reverse()) {
+    const d = await storage.readJson(paths.daily(day));
+    if (!d?.index) continue;
+    return {
+      tsiDay: d.tsiDay,
+      changePct: d.index.changePct,
+      equalWeightPct: d.index.equalWeightPct,
+      divergencePp: d.index.divergencePp,
+      breadth: d.index.breadth,
+      top3: (d.contributions ?? []).slice(0, 3),
+    };
+  }
+  return null;
+}
+
+/**
  * Son N gunun ozeti + tasiyici liderlik tablosu.
  * @param {number} days
  */
