@@ -135,12 +135,16 @@ export function pickPrevClose(rows, usDate) {
  * yasandi. Sembol karakter kumesi ([a-z0-9.^-]) URL sorgusunda zaten guvenli.
  * @param {string[]} symbols
  */
-export function buildQuoteUrl(symbols) {
-  return `${BASE}/q/l/?s=${symbols.map(toStooqSymbol).join(',')}&f=sd2t2ohlcv&h&e=csv`;
+export function buildQuoteUrl(symbols, sep = ',') {
+  return `${BASE}/q/l/?s=${symbols.map(toStooqSymbol).join(sep)}&f=sd2t2ohlcv&h&e=csv`;
 }
 
-/** Ise yaradigi bilinen parca boyutu — ilk basarida ogrenilir, sonra sabit. */
-let preferredChunk = Infinity;
+/**
+ * Ise yaradigi bilinen bicim — ilk basarida ogrenilir. Uretimde 10'luk
+ * virgullu parca bile 404 aldi; ayrac da bilinmeyenler arasinda ('+' PHP
+ * tarzi sunucularda bosluk cozulur). Boyut x ayrac matrisi denenir.
+ */
+let preferred = null;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -159,11 +163,18 @@ export async function fetchStooqQuotes(symbols) {
   if (stooqBlocked()) {
     throw Object.assign(new Error('stooq sogumada'), { permanent: true });
   }
-  const SIZES = [Infinity, 20, 10];
+  const ATTEMPTS = [
+    { size: Infinity, sep: ',' }, { size: Infinity, sep: '+' },
+    { size: 20, sep: ',' }, { size: 20, sep: '+' },
+    { size: 10, sep: ',' }, { size: 10, sep: '+' },
+  ];
   let lastErr = null;
+  const startIdx = preferred
+    ? Math.max(0, ATTEMPTS.findIndex((a) => a.size === preferred.size && a.sep === preferred.sep))
+    : 0;
 
-  for (let si = Math.max(0, SIZES.indexOf(preferredChunk)); si < SIZES.length; si++) {
-    const size = SIZES[si];
+  for (let ai = startIdx; ai < ATTEMPTS.length; ai++) {
+    const { size, sep } = ATTEMPTS[ai];
     const chunks = [];
     if (size === Infinity) chunks.push(symbols);
     else for (let i = 0; i < symbols.length; i += size) chunks.push(symbols.slice(i, i + size));
@@ -173,23 +184,26 @@ export async function fetchStooqQuotes(symbols) {
       const map = new Map();
       for (const [ci, ch] of chunks.entries()) {
         if (ci > 0) await sleep(250);
-        const text = await withRetry(() => getText(buildQuoteUrl(ch)), {
-          tries: 1, label: `stooq:q[${size === Infinity ? 'tum' : size}:${ci}]`,
+        const text = await withRetry(() => getText(buildQuoteUrl(ch, sep)), {
+          tries: 1, label: `stooq:q[${size === Infinity ? 'tum' : size}${sep}:${ci}]`,
         });
         for (const [k, v] of parseQuoteCsv(text)) map.set(k, v);
       }
       if (map.size === 0) throw new Error('bos/taninmayan CSV');
-      if (preferredChunk !== size) {
-        log.info('stooq parca boyutu ogrenildi', { boyut: size === Infinity ? 'tum-liste' : size });
-        preferredChunk = size;
+      if (!preferred || preferred.size !== size || preferred.sep !== sep) {
+        log.info('stooq bicimi ogrenildi', {
+          boyut: size === Infinity ? 'tum-liste' : size, ayrac: sep,
+        });
+        preferred = { size, sep };
       }
       return { map, requests: chunks.length };
     } catch (err) {
-      // Gunluk limit → daha kucuk parca denemek anlamsiz, hemen cik.
+      // Gunluk limit → baska bicim denemek anlamsiz, hemen cik.
       if (/gunluk istek limiti/.test(String(err?.message))) throw err;
       lastErr = err;
-      log.debug('stooq boyut denemesi basarisiz, kuculuyor', {
-        boyut: size === Infinity ? 'tum' : size, err: String(err?.message ?? err).slice(0, 80),
+      log.debug('stooq bicim denemesi basarisiz', {
+        boyut: size === Infinity ? 'tum' : size, ayrac: sep,
+        err: String(err?.message ?? err).slice(0, 80),
       });
     }
   }

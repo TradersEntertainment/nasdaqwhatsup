@@ -17,6 +17,7 @@ import { paths } from '../storage.js';
 import { fetchQuotes, fetchBaselines, fetchChartAll, fetchSparkAll, pickCurrent } from '../sources/yahoo.js';
 import { discoverEquityMarkets, fetchCryptoPrices, fetchCandleBaseline } from '../sources/crypto.js';
 import { fetchStooqQuotes, fetchStooqBaselines, stooqBlocked, stooqInfo } from '../sources/stooq.js';
+import { fetchFinnhubQuotes } from '../sources/finnhub.js';
 import { pool } from '../lib/retry.js';
 import { fetchHoldings } from '../sources/invesco.js';
 import { sessionStartUtc, tsiDate, sessionState, phaseBoundaries, previousTradingDay } from '../../shared/session.js';
@@ -276,6 +277,81 @@ async function tryCrypto(weights, startUtc, nowUtc) {
   } };
 }
 
+/* ---------- Finnhub: anahtarli BIRINCIL yol ---------- */
+
+let finnhubCache = { at: 0, map: null };
+
+/**
+ * FINNHUB_KEY ayarliysa birincil kaynak budur — anahtarsiz kaynaklarin IP
+ * savaslarindan tamamen bagimsiz. Tam tarama ~2 dk surer (60/dk siniri);
+ * canli seansta her poll'da, kapali piyasada 30 dk'da bir tazelenir.
+ *
+ * @param {{holdings: any[], source: string, asOf: string}} weights
+ * @param {number} startUtc
+ * @param {number} nowUtc
+ * @param {{live: boolean}} st
+ */
+async function tryFinnhub(weights, startUtc, nowUtc, st) {
+  if (!config.finnhubKey) return { ok: false, reason: 'finnhub: anahtar yok (FINNHUB_KEY)' };
+  const symbols = weights.holdings.map((h) => h.s);
+
+  let map = finnhubCache.map;
+  const ttl = st.live ? 4 * 60_000 : 30 * 60_000;
+  if (!map || nowUtc - finnhubCache.at > ttl) {
+    // QQQ da taranir: resmi ana-seans %'si icin ^NDX vekili (izleme farki
+    // birkac baz puan). Ucretsiz katman endeks kotasyonu vermiyor.
+    const r = await fetchFinnhubQuotes([...symbols, 'QQQ'], config.finnhubKey);
+    if (r.map.size < 85) {
+      return { ok: false, reason: `finnhub: yalnizca ${r.map.size} kotasyon (${r.reasons.join(' | ') || '?'})` };
+    }
+    map = r.map;
+    finnhubCache = { at: nowUtc, map };
+  }
+
+  const rows = [];
+  for (const h of weights.holdings) {
+    const q = map.get(h.s);
+    if (!q) continue;
+    rows.push({
+      symbol: h.s,
+      name: h.n ?? h.s,
+      sector: h.sector ?? null,
+      shares: h.shares,
+      baseline: q.prevClose,
+      price: q.price,
+      open: q.open,
+      lastTradeAtUtc: q.at,
+      baselineAtUtc: null,
+      baselineSource: 'finnhub-prevclose',
+    });
+  }
+  if (rows.length < 85) {
+    return { ok: false, reason: `finnhub: yalnizca ${rows.length} satir kurulabildi` };
+  }
+
+  const ref = await storage.readJson('ndx-ref.json');
+  const ndxBase = ref?.ndxBase > 0 ? ref.ndxBase : 25400;
+  const warnings = [];
+  if (!(ref?.ndxBase > 0)) warnings.push('ndx-ref-approx');
+  if (weights.source !== 'invesco') warnings.push('weights-approx');
+
+  const qqq = map.get('QQQ');
+  return { ok: true, raw: {
+    rows,
+    ndxBase,
+    nowUtc,
+    officialRegularPct: qqq?.dp ?? null,
+    officialRegularLevel: null,
+    quality: {
+      source: 'finnhub',
+      weightsSource: weights.source === 'bundled-approx' ? 'bundled-approx' : weights.source,
+      weightsAsOf: weights.asOf,
+      missing: symbols.filter((s2) => !rows.some((r2) => r2.symbol === s2)),
+      warnings,
+    },
+  } };
+}
+
 /* ---------- Stooq: gecikmeli ama TAM kapsamli yedek ---------- */
 
 /** Gunluk istek limiti icin kotasyonlar 9 dk onbellekte tutulur. */
@@ -519,6 +595,15 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   const st = sessionState(nowUtc);
   const regOpen = st.isTradingDay ? phaseBoundaries(st.usDate).regOpen : null;
   const all = [...symbols, NDX];
+  /** Her katmanin basarisizlik sebebi buraya birikir — hata mesajina gider. */
+  const why = [];
+
+  // 0) FINNHUB (anahtar varsa BIRINCIL): resmi API, IP savasi yok.
+  if (config.finnhubKey) {
+    const fh = await tryFinnhub(weights, startUtc, nowUtc, st);
+    if (fh.ok) return fh.raw;
+    why.push(fh.reason);
+  }
 
   // YOL SIRASI — ucuzdan pahaliya, anahtarsizdan kapiliya:
   //   1) spark  : toplu, crumb YOK, ~5 istek                 ← birincil
@@ -529,7 +614,6 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   /** @type {Map<string, any>|null} */
   let series = null;
   let seriesVia = null;
-  const why = [];
 
   const spark = await fetchSparkAll(all, startUtc, regOpen);
   if (spark.series.size >= all.length * 0.5) {

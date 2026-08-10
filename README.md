@@ -103,8 +103,13 @@ yüzden fixture modu kalıcı bir özellik, geçici bir çözüm değil.
 3. Bir **volume** bağlayın (örn. `/data`). Railway
    `RAILWAY_VOLUME_MOUNT_PATH`'i otomatik verir. Volume olmadan da site
    çalışır; sadece geçmiş ve gün içi seri birikmez.
-4. Ortam değişkeni gerekmez — API anahtarı yok. `.env.example`'daki ayarlar
-   isteğe bağlı.
+4. **Önerilen: ücretsiz Finnhub anahtarı ekleyin.** Anahtarsız kaynakların
+   hepsi (Yahoo, Stooq) veri merkezi IP'lerine karşı savunma yapıyor ve
+   Railway'de güvenilmezler. <https://finnhub.io> → Register → API key
+   (2 dakika, kart istemez) → Railway'de `FINNHUB_KEY` ortam değişkeni →
+   redeploy. Kod anahtarı görünce Finnhub'ı birincil kaynak yapar; IP
+   savaşları biter. Anahtar olmadan da site çalışır, ama anahtarsız
+   basamaklardan hangisi o gün ayaktaysa ona mahkûmdur.
 5. Healthcheck: `/api/health`. Süreç dinlemeye başlar başlamaz 200 döner —
    veri boru hattının ilk turunu (101 chart isteği) beklemez. Site açılışta
    önce yalnızca kotasyonlarla (~2 sn) dolar, gerçek baz fiyatlar arka planda
@@ -138,6 +143,7 @@ Tek uzun ömürlü Node süreci. Sıfır bağımlılık, sıfır derleme adımı
 
 | Sıra | Kaynak | İstek/döngü | Kapsam |
 |---|---|---|---|
+| 0 | **Finnhub** (`FINNHUB_KEY` varsa birincil) | ~102 (60/dk hızında) | 101 hisse |
 | 1 | Yahoo `v8/spark` (toplu, anahtarsız) | 1 | 101 hisse |
 | 2 | Yahoo `v8/chart` (sembol başına) | ≤102 | 101 hisse |
 | 3 | Yahoo `v7/quote` (crumb) | 3 | kapalı — `YAHOO_USE_CRUMB=1` |

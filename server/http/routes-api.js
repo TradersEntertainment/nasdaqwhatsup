@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import { sessionState } from '../../shared/session.js';
 import { rateLimitInfo } from '../sources/yahoo.js';
 import { discoverEquityMarkets } from '../sources/crypto.js';
+import { fetchWithTimeout } from '../lib/retry.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT } from '../config.js';
@@ -114,6 +115,38 @@ export async function handleApi(req, res, url) {
     } catch (err) {
       json(res, 500, { error: String(err?.message ?? err) });
     }
+    return true;
+  }
+
+  if (p === '/api/stooq-probe') {
+    // Teshis: stooq'un HANGI bicimi kabul ettigini (ya da bulut IP'sini
+    // komple kesip kesmedigini) sunucunun kendi ag konumundan olcer.
+    // Uretimde 10 sembollu virgullu istek bile 404 aldi; tahmin bitti,
+    // olcum basladi. Tek dokunusla calisir, 6 istek atar.
+    const S = 'https://stooq.com';
+    const tests = [
+      ['tek-sembol', `${S}/q/l/?s=aapl.us&f=sd2t2ohlcv&h&e=csv`],
+      ['virgul-2', `${S}/q/l/?s=aapl.us,msft.us&f=sd2t2ohlcv&h&e=csv`],
+      ['arti-2', `${S}/q/l/?s=aapl.us+msft.us&f=sd2t2ohlcv&h&e=csv`],
+      ['f-siz', `${S}/q/l/?s=aapl.us&e=csv`],
+      ['gunluk-seri', `${S}/q/d/l/?s=aapl.us&d1=20260801&d2=20260810&i=d`],
+      ['ana-sayfa', `${S}/`],
+    ];
+    const results = [];
+    for (const [name, testUrl] of tests) {
+      try {
+        const r = await fetchWithTimeout(testUrl, { timeoutMs: 10_000 });
+        const body = (await r.text()).slice(0, 140).replaceAll('\n', ' ⏎ ');
+        results.push({ name, status: r.status, body });
+      } catch (err) {
+        results.push({ name, status: null, error: String(err?.message ?? err).slice(0, 100) });
+      }
+      await new Promise((r2) => setTimeout(r2, 300));
+    }
+    json(res, 200, {
+      note: 'status 200 + CSV govdesi goren bicim dogru bicimdir. Hepsi 404 ise stooq bu IP araligini kesiyor demektir.',
+      results,
+    });
     return true;
   }
 

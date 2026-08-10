@@ -19,6 +19,9 @@ test('kotasyon URL: virguller LITERAL, %2C yok — uretimdeki 404 regresyonu', (
   assert.ok(url.includes('s=nvda.us,aapl.us,^ndx'), url);
   assert.ok(!url.includes('%2C'), 'encodeURIComponent geri gelmis: ' + url);
   assert.ok(url.endsWith('&f=sd2t2ohlcv&h&e=csv'));
+  // Ayrac parametreli cesit: '+' PHP tarzi sunucularda bosluk cozulur.
+  const plus = buildQuoteUrl(['NVDA', 'AAPL'], '+');
+  assert.ok(plus.includes('s=nvda.us+aapl.us'), plus);
 });
 
 test('sembol cevrimi gidis-donus', () => {

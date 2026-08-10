@@ -43,6 +43,13 @@ export const config = {
    */
   yahooUseCrumb: bool(process.env.YAHOO_USE_CRUMB),
 
+  /**
+   * Finnhub API anahtari (https://finnhub.io — ucretsiz). Ayarlandiginda
+   * Finnhub BIRINCIL veri kaynagi olur: anahtarsiz kaynaklarin IP savaslari
+   * tamamen devre disi kalir.
+   */
+  finnhubKey: process.env.FINNHUB_KEY || '',
+
   logLevel: process.env.LOG_LEVEL || 'info',
 
   /** Veriyi "bayat" saymaya baslama esigi (UI rozeti icin). */
