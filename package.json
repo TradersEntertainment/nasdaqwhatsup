@@ -1,0 +1,19 @@
+{
+  "name": "nasdaqwhatsup",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Nasdaq'i Kim Tasiyor? — NASDAQ-100 katki, genislik ve iraksama panosu",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "FIXTURE_MODE=1 node --watch server/index.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "fixture": "node scripts/make-fixture.js",
+    "seed-history": "node scripts/seed-history.js",
+    "doctor": "node scripts/doctor.js",
+    "shoot": "node scripts/shoot.mjs"
+  }
+}

@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.local
+
+# Yerel volume taklidi (Railway'de RAILWAY_VOLUME_MOUNT_PATH kullanilir)
+.data/
+
+# Playwright ciktilari
+screenshots/
+
+# Isletim sistemi
+.DS_Store
