@@ -35,6 +35,14 @@ export const config = {
   /** Railway volume baglayinca otomatik gelir. */
   dataDir: process.env.RAILWAY_VOLUME_MOUNT_PATH || join(ROOT, '.data'),
 
+  /**
+   * Crumb + v7/quote yolu. VARSAYILAN KAPALI: `v1/test/getcrumb` Yahoo'nun en
+   * agresif kisitlanan ucu ve onunla baslamak IP'yi isaretletip anahtarsiz
+   * uclari da zehirliyor. Tek avantaji 3 istek (spark'ta 5, chart'ta 102) —
+   * bu, engellenme riskine degmiyor.
+   */
+  yahooUseCrumb: bool(process.env.YAHOO_USE_CRUMB),
+
   logLevel: process.env.LOG_LEVEL || 'info',
 
   /** Veriyi "bayat" saymaya baslama esigi (UI rozeti icin). */

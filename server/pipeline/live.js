@@ -10,11 +10,11 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ROOT } from '../config.js';
+import { ROOT, config } from '../config.js';
 import { log } from '../lib/log.js';
 import * as storage from '../storage.js';
 import { paths } from '../storage.js';
-import { fetchQuotes, fetchBaselines, fetchChartAll, pickCurrent } from '../sources/yahoo.js';
+import { fetchQuotes, fetchBaselines, fetchChartAll, fetchSparkAll, pickCurrent } from '../sources/yahoo.js';
 import { fetchHoldings } from '../sources/invesco.js';
 import { sessionStartUtc, tsiDate, sessionState, phaseBoundaries } from '../../shared/session.js';
 
@@ -39,6 +39,7 @@ const CRUMB_COOLDOWN_MS = 30 * 60_000;
  * @param {string[]} symbols
  */
 async function tryQuotes(symbols) {
+  if (!config.yahooUseCrumb) return null;
   if (Date.now() < crumbBlockedUntil) {
     log.debug('crumb yolu sogumada, atlaniyor');
     return null;
@@ -156,26 +157,45 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   const weights = await getWeights();
   const symbols = weights.holdings.map((h) => h.s);
 
-  const quotes = await tryQuotes([...symbols, NDX]);
-
-  // Crumb yolu calismiyorsa chart yolu HEM bazi HEM guncel fiyati veriyor;
-  // o durumda ayrica baz cekmeye gerek yok.
   const st = sessionState(nowUtc);
   const regOpen = st.isTradingDay ? phaseBoundaries(st.usDate).regOpen : null;
+  const all = [...symbols, NDX];
+
+  // YOL SIRASI — ucuzdan pahaliya, anahtarsizdan kapiliya:
+  //   1) spark  : toplu, crumb YOK, ~5 istek                 ← birincil
+  //   2) chart  : sembol basina, crumb YOK, ~102 istek
+  //   3) quotes : crumb GEREKLI, 3 istek — varsayilan KAPALI
+  // Onceden sira tersineydi ve en cok kisitlanan uctan baslamak, ondan
+  // bagimsiz olmasi gereken uclari da zehirliyordu.
   /** @type {Map<string, any>|null} */
-  let chart = null;
-  if (!quotes) {
-    const res = await fetchChartAll([...symbols, NDX], startUtc, regOpen);
-    chart = res.series;
-    if (chart.size === 0) {
-      // Sebebi TASI. "Calismadi" demek teshis icin yetersiz; asil soru
-      // Yahoo'nun 403 mu 429 mu zaman asimi mi dondugu.
-      throw new Error(
-        `Yahoo erisilemiyor — kotasyon yolu da chart yolu da bos dondu. ` +
-        `Chart hatalari: ${res.reasons?.join(' | ') || 'bilinmiyor'}`
-      );
+  let series = null;
+  let seriesVia = null;
+  const why = [];
+
+  const spark = await fetchSparkAll(all, startUtc, regOpen);
+  if (spark.series.size >= all.length * 0.5) {
+    series = spark.series;
+    seriesVia = 'spark';
+  } else {
+    if (spark.reasons?.length) why.push(`spark: ${spark.reasons.join(' | ')}`);
+    else why.push(`spark: yalnizca ${spark.series.size}/${all.length} sembol dondu`);
+
+    const chartRes = await fetchChartAll(all, startUtc, regOpen);
+    if (chartRes.series.size > 0) {
+      series = chartRes.series;
+      seriesVia = 'chart';
+    } else if (chartRes.reasons?.length) {
+      why.push(`chart: ${chartRes.reasons.join(' | ')}`);
     }
   }
+
+  // Son care: crumb yolu (yalnizca acikca etkinlestirildiyse).
+  const quotes = series ? null : await tryQuotes(all);
+  if (!series && !quotes) {
+    throw new Error(`Yahoo erisilemiyor. ${why.join(' || ') || 'sebep bilinmiyor'}`);
+  }
+
+  const chart = series;
 
   const baselines = quotes && !fast
     ? await getBaselines(symbols, startUtc, refreshBaselines)
@@ -244,7 +264,7 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   }
 
   const warnings = [];
-  if (chart) warnings.push('chart-fallback');
+  if (seriesVia === 'chart') warnings.push('chart-fallback');
   if (weights.source !== 'invesco') warnings.push('weights-approx');
   if (missing.length) warnings.push('missing-symbols');
   if (fast) warnings.push('provisional-baselines');
@@ -261,7 +281,7 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
       ? ndxQ.regularMarketPrice
       : (ndxC?.price ?? null),
     quality: {
-      source: chart ? 'yahoo-chart' : 'yahoo',
+      source: seriesVia ? `yahoo-${seriesVia}` : 'yahoo',
       weightsSource: weights.source === 'bundled-approx' ? 'bundled-approx' : weights.source,
       weightsAsOf: weights.asOf,
       missing,

@@ -10,7 +10,7 @@
  */
 
 import { fetchWithTimeout } from '../server/lib/retry.js';
-import { fetchQuotes, fetchBaseline, fetchChartSeries, pickCurrent, resetSession } from '../server/sources/yahoo.js';
+import { fetchQuotes, fetchBaseline, fetchChartSeries, fetchSparkAll, pickCurrent, resetSession } from '../server/sources/yahoo.js';
 import { fetchHoldings } from '../server/sources/invesco.js';
 import { sessionStartUtc, sessionState } from '../shared/session.js';
 
@@ -59,8 +59,15 @@ for (const h of HOSTS) {
   });
 }
 
-console.log('\nVeri yolu');
+console.log('\nVeri yolu (birincil once)');
 resetSession();
+
+await step('Yahoo spark (toplu, crumb\'siz)', async () => {
+  const r = await fetchSparkAll(['AAPL', 'MSFT', 'NVDA'], sessionStartUtc(now), null);
+  if (r.series.size === 0) throw new Error(r.reasons?.join(' | ') || 'bos dondu');
+  const a = r.series.get('AAPL');
+  return `${r.series.size}/3 sembol · AAPL baz ${a?.baseline ?? '?'} guncel ${a?.price ?? 'yok'}`;
+});
 
 const quotesOk = await step('Yahoo crumb + toplu kotasyon', async () => {
   const m = await fetchQuotes(['AAPL', 'MSFT', '^NDX']);

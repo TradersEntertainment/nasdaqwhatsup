@@ -38,6 +38,51 @@ function cookieHeader() {
   return [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
 }
 
+/**
+ * Cerez basligi YALNIZCA doluysa gonderilir.
+ *
+ * Onceden kosulsuz `Cookie: cookieHeader()` yaziliyordu; el sikismasi
+ * basarisiz olunca kavanoz bos kaliyor ve istekler bos bir `Cookie:` basligi
+ * tasiyordu. Bu anormal bir imza ve WAF'lar reddedebiliyor — yani crumb
+ * yolunun cokusu, ondan BAGIMSIZ olmasi gereken chart yolunu da zehirliyordu.
+ */
+function authHeaders() {
+  const c = cookieHeader();
+  return c ? { Cookie: c } : {};
+}
+
+/**
+ * Zaman serisinden baz / guncel fiyat / acilis cikarir.
+ * chart ve spark uclari ayni sekli paylastigi icin tek yerde.
+ *
+ * @param {number[]} ts saniye cinsinden zaman damgalari
+ * @param {(number|null)[]} close
+ * @param {number} sessionStartUtc
+ * @param {number|null} regOpenUtc
+ */
+function extractSeries(ts, close, sessionStartUtc, regOpenUtc) {
+  const cutoff = Math.floor(sessionStartUtc / 1000);
+  const openCut = regOpenUtc == null ? null : Math.floor(regOpenUtc / 1000);
+
+  let baseline = null, baselineAt = null;
+  let price = null, priceAt = null, open = null;
+
+  for (let k = 0; k < ts.length; k++) {
+    const c = close[k];
+    if (!Number.isFinite(c) || c <= 0) continue;
+    if (ts[k] < cutoff) {
+      // Seanstan ONCEKI son gecerli bar bazdir (kosul `<`, `<=` degil).
+      baseline = c;
+      baselineAt = ts[k] * 1000;
+    } else {
+      price = c;
+      priceAt = ts[k] * 1000;
+      if (openCut != null && open === null && ts[k] >= openCut) open = c;
+    }
+  }
+  return { baseline, baselineAt, price, priceAt, open };
+}
+
 /* ------------------------------------------------------------------ */
 /* Crumb el sikismasi                                                  */
 /* ------------------------------------------------------------------ */
@@ -75,7 +120,7 @@ async function handshake() {
   // 2) Crumb al.
   const res = await fetchWithTimeout(`${Q1}/v1/test/getcrumb`, {
     timeoutMs: 8000,
-    headers: { Cookie: cookieHeader() },
+    headers: authHeaders(),
   });
   assertOk(res, 'getcrumb');
   const crumb = (await res.text()).trim();
@@ -124,7 +169,7 @@ export async function fetchQuotes(symbols) {
       const json = await withRetry(async () => {
         const res = await fetchWithTimeout(url, {
           timeoutMs: 10_000,
-          headers: { Cookie: cookieHeader() },
+          headers: authHeaders(),
         });
         // Crumb suresi dolduysa BIR KEZ yenile ve tekrar dene.
         if (res.status === 401 || res.status === 403) {
@@ -133,7 +178,7 @@ export async function fetchQuotes(symbols) {
           const retryUrl = url.replace(/crumb=[^&]*/, `crumb=${encodeURIComponent(s2.crumb)}`);
           const res2 = await fetchWithTimeout(retryUrl, {
             timeoutMs: 10_000,
-            headers: { Cookie: cookieHeader() },
+            headers: authHeaders(),
           });
           assertOk(res2, retryUrl);
           return res2.json();
@@ -205,7 +250,7 @@ export async function fetchBaseline(symbol, sessionStartUtc) {
   const json = await withRetry(async () => {
     const res = await fetchWithTimeout(url, {
       timeoutMs: 12_000,
-      headers: { Cookie: cookieHeader() },
+      headers: authHeaders(),
     });
     assertOk(res, url);
     return res.json();
@@ -244,7 +289,7 @@ export async function fetchChartSeries(symbol, sessionStartUtc, regOpenUtc = nul
   const json = await withRetry(async () => {
     const res = await fetchWithTimeout(url, {
       timeoutMs: 12_000,
-      headers: { Cookie: cookieHeader() },
+      headers: authHeaders(),
     });
     assertOk(res, url);
     return res.json();
@@ -255,41 +300,130 @@ export async function fetchChartSeries(symbol, sessionStartUtc, regOpenUtc = nul
   const close = r?.indicators?.quote?.[0]?.close;
   if (!Array.isArray(ts) || !Array.isArray(close)) return null;
 
-  const cutoff = Math.floor(sessionStartUtc / 1000);
-  const openCut = regOpenUtc == null ? null : Math.floor(regOpenUtc / 1000);
-
-  let baseline = null, baselineAt = null;
-  let price = null, priceAt = null, open = null;
-
-  for (let k = 0; k < ts.length; k++) {
-    const c = close[k];
-    if (!Number.isFinite(c) || c <= 0) continue;
-    if (ts[k] < cutoff) {
-      // Seanstan ONCEKI son gecerli bar bazdir (kosul `<`, `<=` degil).
-      baseline = c;
-      baselineAt = ts[k] * 1000;
-    } else {
-      price = c;
-      priceAt = ts[k] * 1000;
-      if (openCut != null && open === null && ts[k] >= openCut) open = c;
-    }
-  }
+  const out = extractSeries(ts, close, sessionStartUtc, regOpenUtc);
 
   // meta.regularMarketPrice 5 dakikalik bardan daha taze olabiliyor.
   const mt = r?.meta?.regularMarketTime;
   const mp = r?.meta?.regularMarketPrice;
   if (Number.isFinite(mp) && mp > 0 && Number.isFinite(mt)) {
     const mAt = mt * 1000;
-    if (mAt >= sessionStartUtc && (priceAt == null || mAt > priceAt)) {
-      price = mp;
-      priceAt = mAt;
+    if (mAt >= sessionStartUtc && (out.priceAt == null || mAt > out.priceAt)) {
+      out.price = mp;
+      out.priceAt = mAt;
     }
   }
 
-  return {
-    baseline, baselineAt, price, priceAt, open,
-    prevClose: r?.meta?.chartPreviousClose ?? r?.meta?.previousClose ?? null,
-  };
+  out.prevClose = r?.meta?.chartPreviousClose ?? r?.meta?.previousClose ?? null;
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* v8 spark — ANAHTARSIZ ve TOPLU. Birincil yol.                       */
+/* ------------------------------------------------------------------ */
+
+const SPARK_BATCH = 25;
+
+/**
+ * Spark cevabini normalize eder. Uc, zaman icinde iki farkli sekil dondurdu;
+ * ikisini de destekliyoruz ve tanimadigimiz sekilde sessizce cokmuyoruz.
+ * @param {any} json
+ * @returns {Map<string, {ts: number[], close: number[], prevClose: number|null}>}
+ */
+export function normalizeSpark(json) {
+  /** @type {Map<string, any>} */
+  const out = new Map();
+  if (!json || typeof json !== 'object') return out;
+
+  // Sekil A: { AAPL: {symbol, timestamp, close, chartPreviousClose}, ... }
+  for (const [key, v] of Object.entries(json)) {
+    if (key === 'spark' || !v || typeof v !== 'object') continue;
+    const ts = /** @type {any} */ (v).timestamp;
+    const close = /** @type {any} */ (v).close;
+    if (Array.isArray(ts) && Array.isArray(close)) {
+      out.set(/** @type {any} */ (v).symbol ?? key, {
+        ts, close,
+        prevClose: /** @type {any} */ (v).chartPreviousClose
+          ?? /** @type {any} */ (v).previousClose ?? null,
+      });
+    }
+  }
+  if (out.size) return out;
+
+  // Sekil B: { spark: { result: [ {symbol, response:[{meta, timestamp, indicators}]} ] } }
+  for (const r of json?.spark?.result ?? []) {
+    const resp = r?.response?.[0];
+    const ts = resp?.timestamp;
+    const close = resp?.indicators?.quote?.[0]?.close;
+    if (Array.isArray(ts) && Array.isArray(close)) {
+      out.set(r.symbol, {
+        ts, close,
+        prevClose: resp?.meta?.chartPreviousClose ?? resp?.meta?.previousClose ?? null,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * BIRINCIL YOL: tek istekte onlarca sembol, crumb YOK, cerez YOK.
+ *
+ * Neden birincil: `v1/test/getcrumb` Yahoo'nun en agresif kisitlanan ucu.
+ * Onunla baslamak IP'yi isaretletip ondan bagimsiz olmasi gereken uclari da
+ * zehirliyor. Spark ise anahtarsiz ve toplu — "Yahoo'dan kolayca veri
+ * cekiyorduk" denen yol tam olarak burasi.
+ *
+ * @param {string[]} symbols
+ * @param {number} sessionStartUtc
+ * @param {number|null} regOpenUtc
+ */
+export async function fetchSparkAll(symbols, sessionStartUtc, regOpenUtc = null) {
+  const t0 = Date.now();
+  /** @type {Map<string, any>} */
+  const out = new Map();
+  const reasons = new Map();
+
+  const chunks = [];
+  for (let i = 0; i < symbols.length; i += SPARK_BATCH) {
+    chunks.push(symbols.slice(i, i + SPARK_BATCH));
+  }
+
+  for (const [ci, chunk] of chunks.entries()) {
+    if (ci > 0) await new Promise((r) => setTimeout(r, 300));
+    const url = `${Q1}/v8/finance/spark` +
+      `?symbols=${encodeURIComponent(chunk.join(','))}` +
+      `&range=2d&interval=5m&includePrePost=true`;
+    try {
+      const json = await withRetry(async () => {
+        const res = await fetchWithTimeout(url, { timeoutMs: 15_000, headers: authHeaders() });
+        assertOk(res, url);
+        return res.json();
+      }, { label: `spark[${ci}]` });
+
+      const norm = normalizeSpark(json);
+      if (norm.size === 0) {
+        reasons.set('spark cevabi taninmadi (sekil degismis olabilir)',
+          (reasons.get('spark cevabi taninmadi (sekil degismis olabilir)') ?? 0) + 1);
+        continue;
+      }
+      for (const [sym, v] of norm) {
+        const e = extractSeries(v.ts, v.close, sessionStartUtc, regOpenUtc);
+        e.prevClose = v.prevClose;
+        if (e.baseline > 0 || e.price > 0) out.set(sym, e);
+      }
+    } catch (err) {
+      const why = String(err?.message ?? err).slice(0, 90);
+      reasons.set(why, (reasons.get(why) ?? 0) + 1);
+    }
+  }
+
+  const topReasons = [...reasons.entries()]
+    .sort((a, b) => b[1] - a[1]).slice(0, 3)
+    .map(([why, n]) => `${n}x ${why}`);
+
+  log.info('spark yolu tamamlandi', {
+    ok: out.size, istek: chunks.length, ms: Date.now() - t0, sebepler: topReasons,
+  });
+  return { series: out, reasons: topReasons };
 }
 
 /**
