@@ -18,6 +18,48 @@ const Q1 = 'https://query1.finance.yahoo.com';
 const Q2 = 'https://query2.finance.yahoo.com';
 
 /* ------------------------------------------------------------------ */
+/* Hiz siniri devre kesicisi                                           */
+/*                                                                     */
+/* Uretimde ogrenilen ders: 429 alinca YENIDEN DENEMEK felaket. Eski   */
+/* kod tek poll dongusunde 321 istek atiyordu (5 spark parcasi x 3     */
+/* deneme + 102 chart x 3 deneme) — yani hiz siniri hatasini kendi     */
+/* kendine ateslenen bir sele ceviriyordu. 429 "bekle" demektir,       */
+/* "tekrar dene" degil.                                                */
+/* ------------------------------------------------------------------ */
+
+let rateLimitedUntil = 0;
+let strikes = 0;
+const COOLDOWN_MIN = [5, 15, 30, 60, 120];
+
+export function isRateLimited() {
+  return Date.now() < rateLimitedUntil;
+}
+
+export function rateLimitInfo() {
+  return {
+    limited: isRateLimited(),
+    remainingSec: Math.max(0, Math.round((rateLimitedUntil - Date.now()) / 1000)),
+    strikes,
+  };
+}
+
+function noteRateLimit() {
+  strikes = Math.min(strikes + 1, COOLDOWN_MIN.length);
+  const mins = COOLDOWN_MIN[strikes - 1];
+  rateLimitedUntil = Date.now() + mins * 60_000;
+  log.warn('Yahoo hiz siniri — tum istekler durduruluyor', { dakika: mins, strike: strikes });
+}
+
+function noteSuccess() {
+  if (strikes) log.info('Yahoo yeniden calisiyor', { oncekiStrike: strikes });
+  strikes = 0;
+  rateLimitedUntil = 0;
+}
+
+/** @param {unknown} err */
+const is429 = (err) => /** @type {any} */ (err)?.status === 429;
+
+/* ------------------------------------------------------------------ */
 /* Cookie kavanozu — Headers.getSetCookie() Node 22'de yerlesik.       */
 /* ------------------------------------------------------------------ */
 
@@ -254,7 +296,7 @@ export async function fetchBaseline(symbol, sessionStartUtc) {
     });
     assertOk(res, url);
     return res.json();
-  }, { label: `chart:${symbol}` });
+  }, { tries: 1, label: `chart:${symbol}` });
 
   const r = json?.chart?.result?.[0];
   const ts = r?.timestamp;
@@ -293,7 +335,7 @@ export async function fetchChartSeries(symbol, sessionStartUtc, regOpenUtc = nul
     });
     assertOk(res, url);
     return res.json();
-  }, { label: `chart:${symbol}` });
+  }, { tries: 1, label: `chart:${symbol}` });
 
   const r = json?.chart?.result?.[0];
   const ts = r?.timestamp;
@@ -321,7 +363,9 @@ export async function fetchChartSeries(symbol, sessionStartUtc, regOpenUtc = nul
 /* v8 spark — ANAHTARSIZ ve TOPLU. Birincil yol.                       */
 /* ------------------------------------------------------------------ */
 
-const SPARK_BATCH = 25;
+// 102 sembol tek URL'de ~670 karakter — parcalamaya gerek yok. Parcalamak
+// istek sayisini bosuna bes katina cikariyordu.
+const SPARK_URL_LIMIT = 6000;
 
 /**
  * Spark cevabini normalize eder. Uc, zaman icinde iki farkli sekil dondurdu;
@@ -382,22 +426,35 @@ export async function fetchSparkAll(symbols, sessionStartUtc, regOpenUtc = null)
   const out = new Map();
   const reasons = new Map();
 
-  const chunks = [];
-  for (let i = 0; i < symbols.length; i += SPARK_BATCH) {
-    chunks.push(symbols.slice(i, i + SPARK_BATCH));
+  if (isRateLimited()) {
+    const { remainingSec } = rateLimitInfo();
+    return { series: out, reasons: [`hiz siniri sogumasi: ${remainingSec} sn kaldi`] };
   }
 
+  // Semboller tek URL'ye sigiyorsa TEK istek. Sigmazsa en az sayida parca.
+  const chunks = [];
+  let cur = [];
+  let len = 0;
+  for (const sym of symbols) {
+    if (len + sym.length + 1 > SPARK_URL_LIMIT && cur.length) {
+      chunks.push(cur); cur = []; len = 0;
+    }
+    cur.push(sym); len += sym.length + 1;
+  }
+  if (cur.length) chunks.push(cur);
+
   for (const [ci, chunk] of chunks.entries()) {
-    if (ci > 0) await new Promise((r) => setTimeout(r, 300));
+    if (ci > 0) await new Promise((r) => setTimeout(r, 500));
     const url = `${Q1}/v8/finance/spark` +
       `?symbols=${encodeURIComponent(chunk.join(','))}` +
       `&range=2d&interval=5m&includePrePost=true`;
     try {
+      // tries:1 — 429'u yeniden denemek sorunu buyutuyor.
       const json = await withRetry(async () => {
-        const res = await fetchWithTimeout(url, { timeoutMs: 15_000, headers: authHeaders() });
+        const res = await fetchWithTimeout(url, { timeoutMs: 20_000, headers: authHeaders() });
         assertOk(res, url);
         return res.json();
-      }, { label: `spark[${ci}]` });
+      }, { tries: 1, label: `spark[${ci}]` });
 
       const norm = normalizeSpark(json);
       if (norm.size === 0) {
@@ -413,8 +470,11 @@ export async function fetchSparkAll(symbols, sessionStartUtc, regOpenUtc = null)
     } catch (err) {
       const why = String(err?.message ?? err).slice(0, 90);
       reasons.set(why, (reasons.get(why) ?? 0) + 1);
+      if (is429(err)) { noteRateLimit(); break; }  // kalan parcalari deneme
     }
   }
+
+  if (out.size) noteSuccess();
 
   const topReasons = [...reasons.entries()]
     .sort((a, b) => b[1] - a[1]).slice(0, 3)
@@ -436,10 +496,26 @@ export async function fetchChartAll(symbols, sessionStartUtc, regOpenUtc = null)
   const t0 = Date.now();
   // Crumb yolu zaten hiz sinirina takildigi icin buraya gelindi — daha
   // temkinli bir havuz ve daha genis aralik kullan.
+  if (isRateLimited()) {
+    const { remainingSec } = rateLimitInfo();
+    return { series: new Map(), failed: symbols, reasons: [`hiz siniri sogumasi: ${remainingSec} sn kaldi`] };
+  }
+
+  // Ilk 429'da TUM fan-out iptal edilir. Aksi halde 102 sembol x 3 deneme =
+  // 306 istek gidiyor ve hiz sinirini derinlestiriyor.
+  let aborted = false;
   const settled = await pool(
-    symbols, 4,
-    (sym) => fetchChartSeries(sym, sessionStartUtc, regOpenUtc),
-    { spacingMs: 250 }
+    symbols, 3,
+    async (sym) => {
+      if (aborted || isRateLimited()) throw new Error('hiz siniri — tur iptal edildi');
+      try {
+        return await fetchChartSeries(sym, sessionStartUtc, regOpenUtc);
+      } catch (err) {
+        if (is429(err)) { aborted = true; noteRateLimit(); }
+        throw err;
+      }
+    },
+    { spacingMs: 400 }
   );
 
   /** @type {Map<string, any>} */
@@ -464,6 +540,7 @@ export async function fetchChartAll(symbols, sessionStartUtc, regOpenUtc = null)
     .slice(0, 3)
     .map(([why, n]) => `${n}x ${why}`);
 
+  if (out.size) noteSuccess();
   log.info('chart-only yol tamamlandi', {
     ok: out.size, basarisiz: failed.length, ms: Date.now() - t0,
     sebepler: topReasons,
@@ -478,10 +555,24 @@ export async function fetchChartAll(symbols, sessionStartUtc, regOpenUtc = null)
  */
 export async function fetchBaselines(symbols, sessionStartUtc) {
   const t0 = Date.now();
+  if (isRateLimited()) {
+    return { baselines: new Map(), failed: symbols };
+  }
+
+  // Bu da 101'lik bir fan-out; ilk 429'da iptal edilmeli.
+  let aborted = false;
   const settled = await pool(
-    symbols, 6,
-    (sym) => fetchBaseline(sym, sessionStartUtc),
-    { spacingMs: 120 }
+    symbols, 4,
+    async (sym) => {
+      if (aborted || isRateLimited()) throw new Error('hiz siniri — tur iptal edildi');
+      try {
+        return await fetchBaseline(sym, sessionStartUtc);
+      } catch (err) {
+        if (is429(err)) { aborted = true; noteRateLimit(); }
+        throw err;
+      }
+    },
+    { spacingMs: 300 }
   );
 
   /** @type {Map<string, {baseline: number, at: number, source: string}>} */

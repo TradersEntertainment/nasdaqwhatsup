@@ -3,6 +3,7 @@ import * as storage from '../storage.js';
 import * as history from '../history.js';
 import { config } from '../config.js';
 import { sessionState } from '../../shared/session.js';
+import { rateLimitInfo } from '../sources/yahoo.js';
 
 /**
  * @param {import('node:http').ServerResponse} res
@@ -52,6 +53,7 @@ export async function handleApi(req, res, url) {
       ...h,
       stale: h.ageSec != null && h.ageSec * 1000 > config.staleAfterMs,
       mode: config.fixtureMode ? `fixture:${config.fixtureVariant}` : 'live',
+      rateLimit: rateLimitInfo(),
       volume: disk,
     });
     return true;
