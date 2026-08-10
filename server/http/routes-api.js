@@ -4,6 +4,10 @@ import * as history from '../history.js';
 import { config } from '../config.js';
 import { sessionState } from '../../shared/session.js';
 import { rateLimitInfo } from '../sources/yahoo.js';
+import { discoverEquityMarkets } from '../sources/crypto.js';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { ROOT } from '../config.js';
 
 /**
  * @param {import('node:http').ServerResponse} res
@@ -94,6 +98,22 @@ export async function handleApi(req, res, url) {
       series.push(history.intradayRow(snap));
     }
     json(res, 200, { day, series });
+    return true;
+  }
+
+  if (p === '/api/discover') {
+    // Teshis ucu: Hyperliquid ve Binance'te NASDAQ-100 sembolleriyle eslesen
+    // piyasa var mi, hangisi daha hacimli? Tahmin etmek yerine veriye sor.
+    // Tarayicidan acilabilsin diye GET.
+    try {
+      const seed = JSON.parse(
+        readFileSync(join(ROOT, 'data', 'holdings.seed.json'), 'utf8')
+      );
+      const symbols = seed.holdings.map((h) => h.s);
+      json(res, 200, await discoverEquityMarkets(symbols));
+    } catch (err) {
+      json(res, 500, { error: String(err?.message ?? err) });
+    }
     return true;
   }
 
