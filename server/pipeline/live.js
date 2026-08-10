@@ -18,9 +18,11 @@ import { fetchQuotes, fetchBaselines, fetchChartAll, fetchSparkAll, pickCurrent 
 import { discoverEquityMarkets, fetchCryptoPrices, fetchCandleBaseline } from '../sources/crypto.js';
 import { fetchStooqQuotes, fetchStooqBaselines, stooqBlocked, stooqInfo } from '../sources/stooq.js';
 import { fetchFinnhubQuotes } from '../sources/finnhub.js';
+import { fetchNasdaq100 } from '../sources/nasdaq.js';
+import { fetchTradingView, toSessionRow } from '../sources/tradingview.js';
 import { pool } from '../lib/retry.js';
 import { fetchHoldings } from '../sources/invesco.js';
-import { sessionStartUtc, tsiDate, sessionState, phaseBoundaries, previousTradingDay } from '../../shared/session.js';
+import { sessionStartUtc, tsiDate, sessionState, phaseBoundaries, previousTradingDay, tsiDayHasTrading } from '../../shared/session.js';
 
 const NDX = '^NDX';
 const WEIGHTS_TTL_MS = 20 * 3600_000;
@@ -275,6 +277,168 @@ async function tryCrypto(weights, startUtc, nowUtc) {
       warnings,
     },
   } };
+}
+
+/* ---------- TradingView: anahtarsiz, tek istek, UZATILMIS SEANS DAHIL ---------- */
+
+let tvCache = { at: 0, map: null, extended: false };
+
+/**
+ * BIRINCIL yol. Tek POST ile 100 hissenin fiyati, net degisimi ve pre/after
+ * market baskilari. "Seans disi dahil" gereksinimini gercekten karsilayan
+ * tek anahtarsiz kaynak bu — Yahoo spark'i bile uzatilmis seansi ayri bir
+ * istek olmadan vermiyordu.
+ *
+ * @param {{holdings: any[], source: string, asOf: string}} weights
+ * @param {number} startUtc
+ * @param {number} nowUtc
+ * @param {ReturnType<typeof sessionState>} st
+ */
+async function tryTradingView(weights, startUtc, nowUtc, st) {
+  const symbols = weights.holdings.map((h) => h.s);
+
+  let map = tvCache.map;
+  const ttl = st.live ? 60_000 : 15 * 60_000;
+  if (!map || nowUtc - tvCache.at > ttl) {
+    try {
+      // QQQ da istenir: ucretsiz uclarin hicbiri ^NDX vermiyor, QQQ resmi
+      // ana-seans yuzdesi icin en yakin vekil (izleme farki birkac baz puan).
+      const r = await fetchTradingView([...symbols, 'QQQ']);
+      map = r.map;
+      tvCache = { at: nowUtc, map, extended: r.extended };
+    } catch (err) {
+      return { ok: false, reason: String(err?.message ?? err).slice(0, 140) };
+    }
+  }
+
+  const hasTrading = tsiDayHasTrading(st.tsiDate);
+  const rows = [];
+  for (const h of weights.holdings) {
+    const rec = map.get(h.s);
+    if (!rec) continue;
+    const sr = toSessionRow(rec, st.phase, hasTrading);
+    if (!sr) continue;
+    rows.push({
+      symbol: h.s,
+      name: h.n ?? h.s,
+      sector: h.sector ?? null,
+      shares: h.shares,
+      baseline: sr.baseline,
+      price: sr.price,
+      open: sr.open,
+      // TradingView zaman damgasi vermiyor; "islem gordu mu" sorusu uzatilmis
+      // seans HACMINDEN cevaplaniyor (fiyat esitligi yaniltici bir olcu).
+      lastTradeAtUtc: sr.traded ? nowUtc : startUtc - 3600_000,
+      baselineAtUtc: null,
+      baselineSource: st.phase === 'REGULAR' || st.phase === 'AFTER_HOURS'
+        ? 'tv-prevclose' : 'tv-lastclose',
+    });
+  }
+
+  if (rows.length < 85) {
+    return { ok: false, reason: `tradingview: yalnizca ${rows.length}/${symbols.length} sembol cozuldu (<85)` };
+  }
+
+  const ref = await storage.readJson('ndx-ref.json');
+  const ndxBase = ref?.ndxBase > 0 ? ref.ndxBase : 25400;
+  const warnings = [];
+  if (!(ref?.ndxBase > 0)) warnings.push('ndx-ref-approx');
+  if (weights.source !== 'invesco') warnings.push('weights-approx');
+  // Asgari kolon setine dusulduyse uzatilmis seans YOK — kullaniciya soyle.
+  if (!tvCache.extended) warnings.push('no-extended-hours');
+
+  const qqq = map.get('QQQ');
+  return { ok: true, raw: {
+    rows,
+    ndxBase,
+    nowUtc,
+    officialRegularPct: Number.isFinite(qqq?.change) ? qqq.change : null,
+    officialRegularLevel: null,
+    quality: {
+      source: 'tradingview',
+      weightsSource: weights.source === 'bundled-approx' ? 'bundled-approx' : weights.source,
+      weightsAsOf: weights.asOf,
+      missing: symbols.filter((s) => !rows.some((r) => r.symbol === s)),
+      warnings,
+    },
+  } };
+}
+
+/* ---------- api.nasdaq.com: anahtarsiz, tek istekte tam kapsam ---------- */
+
+let nasdaqCache = { at: 0, rows: null };
+
+/**
+ * En iyi ANAHTARSIZ yol: nasdaq.com'un kendi API'si, tek istekte 100 hisse
+ * (fiyat + net degisimden turetilen baz). Anahtar istemez; kullanicinin
+ * "anahtarla ugrasmak istemiyorum" talebini karsilar.
+ *
+ * @param {{holdings: any[], source: string, asOf: string}} weights
+ * @param {number} nowUtc
+ * @param {{live: boolean}} st
+ */
+async function tryNasdaq(weights, nowUtc, st) {
+  let rows = nasdaqCache.rows;
+  const ttl = st.live ? 60_000 : 30 * 60_000;
+  if (!rows || nowUtc - nasdaqCache.at > ttl) {
+    try {
+      const r = await fetchNasdaq100();
+      rows = r.rows;
+      nasdaqCache = { at: nowUtc, rows };
+    } catch (err) {
+      return { ok: false, reason: `nasdaq.com: ${String(err?.message ?? err).slice(0, 90)}` };
+    }
+  }
+
+  const byS = new Map(rows.map((r) => [r.symbol, r]));
+  const built = [];
+  for (const h of weights.holdings) {
+    const q = byS.get(h.s);
+    if (!q || !(q.price > 0) || !(q.prevClose > 0)) continue;
+    // Fiyat prevClose'dan farkliysa bugun islem gormus demektir.
+    const traded = Math.abs(q.price - q.prevClose) > 1e-9 || q.pct != null;
+    built.push({
+      symbol: h.s,
+      name: h.n ?? q.name ?? h.s,
+      sector: h.sector ?? null,
+      shares: h.shares,
+      baseline: q.prevClose,
+      price: q.price,
+      open: null,
+      lastTradeAtUtc: traded ? nowUtc : startUtcOf(nowUtc) - 3600_000,
+      baselineAtUtc: null,
+      baselineSource: 'nasdaq-prevclose',
+    });
+  }
+  if (built.length < 85) {
+    return { ok: false, reason: `nasdaq.com: yalnizca ${built.length} eslesme (<85)` };
+  }
+
+  const ref = await storage.readJson('ndx-ref.json');
+  const ndxBase = ref?.ndxBase > 0 ? ref.ndxBase : 25400;
+  const warnings = [];
+  if (!(ref?.ndxBase > 0)) warnings.push('ndx-ref-approx');
+  if (weights.source !== 'invesco') warnings.push('weights-approx');
+
+  return { ok: true, raw: {
+    rows: built,
+    ndxBase,
+    nowUtc,
+    officialRegularPct: null,
+    officialRegularLevel: null,
+    quality: {
+      source: 'nasdaq.com',
+      weightsSource: weights.source === 'bundled-approx' ? 'bundled-approx' : weights.source,
+      weightsAsOf: weights.asOf,
+      missing: weights.holdings.map((h) => h.s).filter((x) => !built.some((b) => b.symbol === x)),
+      warnings,
+    },
+  } };
+}
+
+/** Kucuk yardimci: nasdaq yolu startUtc'yi disaridan almiyor. */
+function startUtcOf(nowUtc) {
+  return sessionStartUtc(nowUtc);
 }
 
 /* ---------- Finnhub: anahtarli BIRINCIL yol ---------- */
@@ -598,7 +762,37 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   /** Her katmanin basarisizlik sebebi buraya birikir — hata mesajina gider. */
   const why = [];
 
-  // 0) FINNHUB (anahtar varsa BIRINCIL): resmi API, IP savasi yok.
+  // KAYNAK SIRASI — anahtarsiz ve veri merkezi IP'sinden GERCEKTEN calisan
+  // uclar once. Sira, tahminle degil olcumle belirlendi: Yahoo bulut
+  // IP'lerine 34 ms'de 429 basiyor, Stooq 404 veriyor. Asagidaki ilk uc
+  // kaynak ise ayni ag konumundan calisan uretim kodunda kanitli.
+
+  // 0) TRADINGVIEW — tek POST, 100 hisse, PRE/AFTER MARKET DAHIL. "Seans
+  //    disi da dahil" gereksinimini karsilayan tek anahtarsiz kaynak.
+  {
+    const tv = await tryTradingView(weights, startUtc, nowUtc, st);
+    if (tv.ok) return tv.raw;
+    why.push(tv.reason);
+  }
+
+  // 1) NASDAQ.COM — tek istekte 100 hisse (ana seans odakli). Tarayici
+  //    User-Agent'i sart; UA'siz istek 403 aliyor.
+  {
+    const nd = await tryNasdaq(weights, nowUtc, st);
+    if (nd.ok) return nd.raw;
+    why.push(nd.reason);
+  }
+
+  // 2) HYPERLIQUID (HIP-3 `xyz` dex'i) — hisse perp'leri. Kismi kapsam ama
+  //    7/24 fiyat verir; kullanicinin kendi projesi fiyatlarini buradan
+  //    okuyor. Kapsam yetersizse asagidaki katmanlar devam eder.
+  {
+    const cr = await tryCrypto(weights, startUtc, nowUtc);
+    if (cr.ok) return cr.raw;
+    why.push(cr.reason);
+  }
+
+  // 3) FINNHUB — yalnizca anahtar varsa; artik birincil DEGIL.
   if (config.finnhubKey) {
     const fh = await tryFinnhub(weights, startUtc, nowUtc, st);
     if (fh.ok) return fh.raw;
@@ -635,16 +829,13 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   // Son care (Yahoo icinde): crumb yolu, yalnizca acikca etkinlestirildiyse.
   const quotes = series ? null : await tryQuotes(all);
   if (!series && !quotes) {
-    // Yahoo'nun hicbir ucu calismadi. Sirayla: stooq (gecikmeli ama TAM
-    // kapsam) -> kripto (kismi kapsam). Her katmanin basarisizlik SEBEBI
-    // hata mesajina eklenir — "calismadi" teshis icin yetersiz.
+    // Yahoo'nun da hicbir ucu calismadi. Son katman: stooq (gecikmeli ama TAM
+    // kapsam). Kripto yolu yukarida zaten denendi — tekrar denemek iki borsayi
+    // bosuna dover. Her katmanin basarisizlik SEBEBI hata mesajina eklenir;
+    // "calismadi" teshis icin yetersiz.
     const stq = await tryStooq(weights, startUtc, nowUtc, st);
     if (stq.ok) return stq.raw;
     why.push(stq.reason);
-
-    const cr = await tryCrypto(weights, startUtc, nowUtc);
-    if (cr.ok) return cr.raw;
-    why.push(cr.reason);
 
     throw new Error(`Hicbir veri kaynagi calismadi. ${why.join(' || ')}`);
   }

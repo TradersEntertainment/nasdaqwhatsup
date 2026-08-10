@@ -103,13 +103,9 @@ yüzden fixture modu kalıcı bir özellik, geçici bir çözüm değil.
 3. Bir **volume** bağlayın (örn. `/data`). Railway
    `RAILWAY_VOLUME_MOUNT_PATH`'i otomatik verir. Volume olmadan da site
    çalışır; sadece geçmiş ve gün içi seri birikmez.
-4. **Önerilen: ücretsiz Finnhub anahtarı ekleyin.** Anahtarsız kaynakların
-   hepsi (Yahoo, Stooq) veri merkezi IP'lerine karşı savunma yapıyor ve
-   Railway'de güvenilmezler. <https://finnhub.io> → Register → API key
-   (2 dakika, kart istemez) → Railway'de `FINNHUB_KEY` ortam değişkeni →
-   redeploy. Kod anahtarı görünce Finnhub'ı birincil kaynak yapar; IP
-   savaşları biter. Anahtar olmadan da site çalışır, ama anahtarsız
-   basamaklardan hangisi o gün ayaktaysa ona mahkûmdur.
+4. **Anahtar gerekmiyor.** Birincil kaynak TradingView screener, yedeği
+   api.nasdaq.com — ikisi de anahtarsız ve veri merkezi IP'lerinden çalışıyor.
+   `FINNHUB_KEY` isteğe bağlı bir yedek olarak duruyor, artık birincil değil.
 5. Healthcheck: `/api/health`. Süreç dinlemeye başlar başlamaz 200 döner —
    veri boru hattının ilk turunu (101 chart isteği) beklemez. Site açılışta
    önce yalnızca kotasyonlarla (~2 sn) dolar, gerçek baz fiyatlar arka planda
@@ -124,9 +120,11 @@ curl https://<uygulamanız>/api/snapshot | jq '.quality, .index.changePct, .inde
 
 - `/api/health` **her zaman 200** döner (süreç ayakta olduğu sürece). Veri
   hazırlığı gövdedeki `ready` alanında; birkaç saniye içinde `true` olmalı.
-- `quality.source == "yahoo"` → hızlı yol (v7 toplu kotasyon) çalışıyor.
-  `"yahoo-chart"` → crumb ucu kısıtlamış, crumb'sız chart yoluna düşülmüş;
-  veri yine canlı, sadece daha maliyetli.
+- `quality.source == "tradingview"` → birincil yol çalışıyor, uzatılmış seans
+  dahil. `"nasdaq.com"` → TradingView düşmüş, ana seans verisiyle devam
+  ediliyor. `"crypto-hyperliquid"` → ikisi de düşmüş, kısmi kapsam modundayız.
+- `quality.warnings` içinde `no-extended-hours` → TradingView'in uzatılmış
+  seans kolonları reddedilmiş, asgari kolon setine düşülmüş.
 - `quality.weightsSource == "invesco"` → gerçek ağırlıklar okundu.
   `"bundled-approx"` görüyorsanız Invesco'ya erişilememiş; site çalışır ama
   ağırlıklar yaklaşıktır ve UI bunu söyler.
@@ -141,21 +139,38 @@ Tek uzun ömürlü Node süreci. Sıfır bağımlılık, sıfır derleme adımı
 
 **Veri merdiveni** (ucuzdan pahalıya, tam kapsamdan kısmiye):
 
-| Sıra | Kaynak | İstek/döngü | Kapsam |
-|---|---|---|---|
-| 0 | **Finnhub** (`FINNHUB_KEY` varsa birincil) | ~102 (60/dk hızında) | 101 hisse |
-| 1 | Yahoo `v8/spark` (toplu, anahtarsız) | 1 | 101 hisse |
-| 2 | Yahoo `v8/chart` (sembol başına) | ≤102 | 101 hisse |
-| 3 | Yahoo `v7/quote` (crumb) | 3 | kapalı — `YAHOO_USE_CRUMB=1` |
-| 4 | **Stooq** (~15 dk gecikmeli) | 1 kotasyon + günde 102 baz | 101 hisse |
-| 5 | **Hyperliquid / Binance perp** | ~2 | **kısmi** — yalnızca listelenen hisseler |
+| Sıra | Kaynak | İstek/döngü | Kapsam | Anahtar |
+|---|---|---|---|---|
+| 0 | **TradingView screener** | **1** | 101 hisse + **pre/after market** | yok |
+| 1 | **api.nasdaq.com** liste ucu | 1 | 101 hisse (ana seans) | yok |
+| 2 | **Hyperliquid** HIP-3 `xyz` dex'i (hisse perp) | ~2 | kısmi — dex'te listeli hisseler | yok |
+| 3 | Finnhub (`FINNHUB_KEY` varsa) | ~102 (60/dk) | 101 hisse | var |
+| 4 | Yahoo `v8/spark` → `v8/chart` → `v7/quote` | 1 → ≤102 → 3 | 101 hisse | yok |
+| 5 | Stooq (~15 dk gecikmeli) | 1 kotasyon + günde 102 baz | 101 hisse | yok |
+
+Sıra tahminle değil **ölçümle** belirlendi. Railway'in çıkış IP'lerinden Yahoo
+34 ms'de `429`, Stooq `404`, Invesco `406` dönüyor — bunlar ASN seviyesinde
+ceza, yeniden deneme ile aşılmıyor. İlk üç basamak ise aynı ağ konumundan
+çalıştığı **üretimde kanıtlı** uçlar; hepsi tarayıcı `User-Agent`'ı istiyor
+(UA'sız istek `403` alıyor).
+
+TradingView basamağı tek POST ile fiyat + net değişim + `premarket_*` +
+`postmarket_*` veriyor; **"seans dışı dahil" gereksinimini gerçekten karşılayan
+tek anahtarsız kaynak bu.** TSİ bazı fazdan türetilir: ana seans/after-hours'ta
+`baz = close − change_abs`, devir/gece/pre-market'te `baz = close` (o an `close`
+zaten önceki kapanıştır). İkisini karıştırmak bir günlük kaymaya yol açar —
+`test/tradingview.test.js` bu regresyonu kilitler.
 
 429 görülünce üstel devre kesici devreye girer (5→120 dk) ve o süre Yahoo'ya
-hiç dokunulmaz. Stooq basamağı gecikmeli ama TAM kapsamdır (genişlik istatistiği çalışır);
-son basamak *kısmi kapsam* modudur: hüküm PARTIAL'a sabitlenir,
-genişlik/eşit-ağırlık istatistikleri gizlenir, kısmi günler geçmişe yazılmaz
-ve arayüz fiyatların perp olduğunu açıkça söyler. Hangi borsanın kullanılacağını
-`/api/discover` ölçer (kesişim + 24s hacim) — tahmin edilmez.
+hiç dokunulmaz. Hyperliquid basamağı *kısmi kapsam* modudur: hüküm PARTIAL'a
+sabitlenir, genişlik/eşit-ağırlık istatistikleri gizlenir, kısmi günler geçmişe
+yazılmaz ve arayüz fiyatların perp olduğunu açıkça söyler. Hisse perp'leri ana
+evrende **değil**, HIP-3 builder dex'lerinde yaşar (`EQUITY_DEXES`, varsayılan
+`xyz`); `/api/discover` hangi dex'in ne getirdiğini dex kırılımıyla raporlar.
+
+**Teşhis uçları:** `/api/tv-probe`, `/api/nasdaq-probe`, `/api/discover`,
+`/api/stooq-probe` — her biri o kaynağın sunucunun kendi ağ konumundan ne
+döndürdüğünü ham olarak gösterir.
 
 ```
 shared/     matematik + seans mantığı — SUNUCU VE TARAYICI ORTAK, tek kaynak

@@ -50,6 +50,15 @@ export const config = {
    */
   finnhubKey: process.env.FINNHUB_KEY || '',
 
+  /**
+   * Hyperliquid HIP-3 "builder dex"leri: hisse perp'leri ANA EVRENDE DEGIL,
+   * bunlarin icinde yasiyor. `perpDexs` listesi uzun ve sirasi degisken
+   * oldugu icin bilinen hisse dex'leri ayrica sabitleniyor — aksi halde
+   * kesif listenin kuyrugunda kalan dex'i hic gormuyor.
+   */
+  equityDexes: (process.env.EQUITY_DEXES || 'xyz')
+    .split(',').map((s) => s.trim()).filter(Boolean),
+
   logLevel: process.env.LOG_LEVEL || 'info',
 
   /** Veriyi "bayat" saymaya baslama esigi (UI rozeti icin). */

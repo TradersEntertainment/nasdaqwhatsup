@@ -118,6 +118,54 @@ export async function handleApi(req, res, url) {
     return true;
   }
 
+  if (p === '/api/tv-probe') {
+    // Teshis: TradingView screener bu ag konumundan calisiyor mu, hangi kolon
+    // seti geciyor, uzatilmis seans alanlari dolu mu? Ornek olarak 3 sembol.
+    try {
+      const { fetchTradingView, toSessionRow } = await import('../sources/tradingview.js');
+      const st = sessionState(effectiveNow());
+      const r = await fetchTradingView(['AAPL', 'NVDA', 'MSFT', 'QQQ']);
+      json(res, 200, {
+        ok: true,
+        url: r.url,
+        uzatilmisSeans: r.extended,
+        faz: st.phase,
+        adet: r.map.size,
+        ornek: [...r.map].map(([s, rec]) => ({
+          s, ...rec, tsi: toSessionRow(rec, st.phase, true),
+        })),
+      });
+    } catch (err) {
+      json(res, 200, { ok: false, error: String(err?.message ?? err) });
+    }
+    return true;
+  }
+
+  if (p === '/api/nasdaq-probe') {
+    // Teshis: nasdaq.com liste ucu ne donduruyor? Ham cevabin ilk 600
+    // karakteri + kac satir ayristirildigi. 403 gorursek datamerkezi engeli.
+    try {
+      const r = await fetchWithTimeout(
+        'https://api.nasdaq.com/api/quote/list-type/nasdaq100?limit=110',
+        { timeoutMs: 15_000, headers: {
+          Accept: 'application/json, text/plain, */*',
+          'Accept-Language': 'en-US,en;q=0.9',
+          Origin: 'https://www.nasdaq.com', Referer: 'https://www.nasdaq.com/',
+          'Sec-Fetch-Site': 'same-site',
+        } });
+      const body = await r.text();
+      let parsed = 0;
+      try {
+        const { parseNasdaqList } = await import('../sources/nasdaq.js');
+        parsed = parseNasdaqList(JSON.parse(body)).length;
+      } catch { /* ayristirilamadi */ }
+      json(res, 200, { status: r.status, parsedRows: parsed, bodyHead: body.slice(0, 600) });
+    } catch (err) {
+      json(res, 200, { status: null, error: String(err?.message ?? err) });
+    }
+    return true;
+  }
+
   if (p === '/api/stooq-probe') {
     // Teshis: stooq'un HANGI bicimi kabul ettigini (ya da bulut IP'sini
     // komple kesip kesmedigini) sunucunun kendi ag konumundan olcer.

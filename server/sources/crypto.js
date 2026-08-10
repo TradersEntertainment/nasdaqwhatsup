@@ -19,6 +19,7 @@
 
 import { fetchWithTimeout, withRetry, assertOk } from '../lib/retry.js';
 import { log } from '../lib/log.js';
+import { config } from '../config.js';
 
 const HL_INFO = 'https://api.hyperliquid.xyz/info';
 const BINANCE = 'https://api.binance.com';
@@ -50,10 +51,14 @@ export function parseHlMetaCtxs(json, dex = '') {
     out.push({
       venue: 'hyperliquid',
       dex,
-      name: raw.toUpperCase(),
+      // HIP-3 dex'lerinde `meta` bazen duz ad ("AAPL"), bazen tam adres
+      // ("xyz:AAPL") donuyor. Eslesme SEMBOL uzerinden yapilmali; prefiksi
+      // burada birakmak butun hisse evrenini gorunmez yapiyordu.
+      name: raw.split(':').pop().toUpperCase(),
       rawName: raw,
-      // Builder dex'lerdeki coin'ler dis API'de "dex:AD" ile adreslenir.
-      market: dex ? `${dex}:${raw}` : raw,
+      // Builder dex'lerdeki coin'ler dis API'de "dex:AD" ile adreslenir —
+      // ad zaten prefiksliyse tekrar prefikslenmez ("xyz:xyz:AAPL" olmasin).
+      market: dex && !raw.includes(':') ? `${dex}:${raw}` : raw,
       price,
       prevDayPx: Number(c.prevDayPx) > 0 ? Number(c.prevDayPx) : null,
       volume: Number(c.dayNtlVlm) || 0,
@@ -158,20 +163,27 @@ async function hlInfo(body, { tries = 2, label = 'hl' } = {}) {
   }, { tries, label });
 }
 
-/** HIP-3 builder dex adlari. Hisse perp'leri genelde ana evrende DEGIL, bunlarda. */
+/**
+ * HIP-3 builder dex adlari. Hisse perp'leri ana evrende DEGIL, bunlarda.
+ *
+ * Bilinen hisse dex'leri (config.equityDexes, varsayilan `xyz`) HER ZAMAN
+ * basa konur: `perpDexs` listesi uzun ve sirasi degisken, onceki surumdeki
+ * `.slice(0, 30)` tam da aradigimiz dex'i listenin kuyrugunda birakip
+ * kesfi bos donduruyordu.
+ */
 export async function listHlDexes() {
+  const known = config.equityDexes;
   try {
     const json = await hlInfo({ type: 'perpDexs' }, { tries: 1, label: 'hl:perpDexs' });
-    if (!Array.isArray(json)) return [];
-    const names = [];
-    for (const d of json) {
+    const names = [...known];
+    for (const d of Array.isArray(json) ? json : []) {
       const name = typeof d === 'string' ? d : d?.name;
       if (name && typeof name === 'string') names.push(name);
     }
-    return [...new Set(names)].slice(0, 30);
+    return [...new Set(names)].slice(0, 100);
   } catch (err) {
-    log.debug('perpDexs alinamadi — yalniz ana evren', { err: String(err?.message ?? err) });
-    return [];
+    log.debug('perpDexs alinamadi — yalniz bilinen dex\'ler', { err: String(err?.message ?? err) });
+    return [...known];
   }
 }
 
@@ -281,6 +293,21 @@ export async function discoverEquityMarkets(ndxSymbols) {
           price: m.price, prevDayPx: m.prevDayPx, volume: Math.round(m.volume),
         })),
         looseMatches: loose,
+        // Teshis: hangi dex kac piyasa ve kac NDX eslesmesi getirdi? Hisse
+        // perp'leri tek bir HIP-3 dex'inde toplaniyor; "0 eslesme" gorunce
+        // "hisse yok" degil "yanlis dex'e baktik" ihtimali once elenmeli.
+        byDex: Object.entries(
+          markets.reduce((acc, m) => {
+            const k = m.dex || '(ana)';
+            acc[k] ??= { piyasa: 0, eslesen: 0, ornek: [] };
+            acc[k].piyasa++;
+            if (exact.get(m.name) === m) acc[k].eslesen++;
+            if (acc[k].ornek.length < 6) acc[k].ornek.push(m.name);
+            return acc;
+          }, /** @type {Record<string, any>} */ ({}))
+        ).sort((a, b) => b[1].eslesen - a[1].eslesen || b[1].piyasa - a[1].piyasa)
+          .slice(0, 15)
+          .map(([dex, v]) => ({ dex, ...v })),
       };
       log.info(`${venue} kesfi`, {
         piyasa: markets.length, eslesen: matched.length,
