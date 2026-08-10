@@ -311,16 +311,30 @@ export async function fetchChartAll(symbols, sessionStartUtc, regOpenUtc = null)
   /** @type {Map<string, any>} */
   const out = new Map();
   const failed = [];
+  /** Hata SEBEPLERI de toplaniyor — "calismadi" demek teshis icin yetersiz. */
+  const reasons = new Map();
   settled.forEach((r, i) => {
-    if (r.status === 'fulfilled' && r.value) out.set(symbols[i], r.value);
-    else failed.push(symbols[i]);
+    if (r.status === 'fulfilled' && r.value) {
+      out.set(symbols[i], r.value);
+      return;
+    }
+    failed.push(symbols[i]);
+    const why = r.status === 'rejected'
+      ? String(r.reason?.message ?? r.reason).slice(0, 90)
+      : 'bos sonuc (bar yok)';
+    reasons.set(why, (reasons.get(why) ?? 0) + 1);
   });
+
+  const topReasons = [...reasons.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([why, n]) => `${n}x ${why}`);
 
   log.info('chart-only yol tamamlandi', {
     ok: out.size, basarisiz: failed.length, ms: Date.now() - t0,
-    eksik: failed.slice(0, 10),
+    sebepler: topReasons,
   });
-  return { series: out, failed };
+  return { series: out, failed, reasons: topReasons };
 }
 
 /**

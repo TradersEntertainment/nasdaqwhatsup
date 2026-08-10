@@ -165,9 +165,15 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   /** @type {Map<string, any>|null} */
   let chart = null;
   if (!quotes) {
-    chart = (await fetchChartAll([...symbols, NDX], startUtc, regOpen)).series;
+    const res = await fetchChartAll([...symbols, NDX], startUtc, regOpen);
+    chart = res.series;
     if (chart.size === 0) {
-      throw new Error('Ne kotasyon ne chart yolu calisti — Yahoo erisilemiyor');
+      // Sebebi TASI. "Calismadi" demek teshis icin yetersiz; asil soru
+      // Yahoo'nun 403 mu 429 mu zaman asimi mi dondugu.
+      throw new Error(
+        `Yahoo erisilemiyor — kotasyon yolu da chart yolu da bos dondu. ` +
+        `Chart hatalari: ${res.reasons?.join(' | ') || 'bilinmiyor'}`
+      );
     }
   }
 

@@ -10,7 +10,7 @@
  */
 
 import { fetchWithTimeout } from '../server/lib/retry.js';
-import { fetchQuotes, fetchBaseline, pickCurrent, resetSession } from '../server/sources/yahoo.js';
+import { fetchQuotes, fetchBaseline, fetchChartSeries, pickCurrent, resetSession } from '../server/sources/yahoo.js';
 import { fetchHoldings } from '../server/sources/invesco.js';
 import { sessionStartUtc, sessionState } from '../shared/session.js';
 
@@ -77,6 +77,14 @@ if (quotesOk) {
     return `${b.baseline} @ ${new Date(b.at).toISOString()} (${b.source})`;
   });
 }
+
+// Crumb yolundan BAGIMSIZ olarak chart ucunu dene: yedek yolun calisip
+// calismadigini bilmek, crumb'in kisitli olup olmadigindan daha onemli.
+await step('Yahoo chart (crumb\'siz yedek yol)', async () => {
+  const c = await fetchChartSeries('AAPL', sessionStartUtc(now), null);
+  if (!c) throw new Error('bar donmedi');
+  return `baz ${c.baseline} · guncel ${c.price ?? 'yok'}`;
+});
 
 await step('Invesco QQQ holdings', async () => {
   const { holdings } = await fetchHoldings();
