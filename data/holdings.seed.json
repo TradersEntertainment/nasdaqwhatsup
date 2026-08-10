@@ -1,106 +1,714 @@
 {
-  "source": "bundled-approx",
-  "asOf": "2026-05-01",
-  "note": "YAKLASIK onyukleme verisi — model bilgisinden yazildi, canli bir kaynaktan cekilmedi. Invesco QQQ holdings CSV'sine ilk basarili erisimde tamamen degistirilir. refWeight/refPrice ciftinden ortulu pay adedi turetilir: shares = refWeight / refPrice. Calisma aninda agirlik wi = shares_i * baz_i / Σ oldugundan, fiyatlar refPrice'tan uzaklastikca agirliklar dogru yonde kayar. Uyeligin kendisi de yaklasiktir; gecersiz semboller Yahoo'dan veri donmeyince dusurulur.",
-  "holdings": [
-    { "s": "NVDA",  "n": "NVIDIA",                        "sector": "Yari Iletken",     "refWeight": 9.80, "refPrice": 182.00 },
-    { "s": "AAPL",  "n": "Apple",                         "sector": "Donanim",          "refWeight": 8.00, "refPrice": 258.00 },
-    { "s": "MSFT",  "n": "Microsoft",                     "sector": "Yazilim",          "refWeight": 7.60, "refPrice": 505.00 },
-    { "s": "AVGO",  "n": "Broadcom",                      "sector": "Yari Iletken",     "refWeight": 6.20, "refPrice": 355.00 },
-    { "s": "AMZN",  "n": "Amazon",                        "sector": "E-Ticaret",        "refWeight": 5.50, "refPrice": 232.00 },
-    { "s": "META",  "n": "Meta Platforms",                "sector": "Internet",         "refWeight": 3.40, "refPrice": 640.00 },
-    { "s": "GOOGL", "n": "Alphabet A",                    "sector": "Internet",         "refWeight": 2.95, "refPrice": 255.00 },
-    { "s": "GOOG",  "n": "Alphabet C",                    "sector": "Internet",         "refWeight": 2.85, "refPrice": 256.00 },
-    { "s": "TSLA",  "n": "Tesla",                         "sector": "Otomotiv",         "refWeight": 2.70, "refPrice": 425.00 },
-    { "s": "NFLX",  "n": "Netflix",                       "sector": "Medya",            "refWeight": 2.65, "refPrice": 1120.00 },
-    { "s": "COST",  "n": "Costco",                        "sector": "Perakende",        "refWeight": 2.30, "refPrice": 925.00 },
-    { "s": "PLTR",  "n": "Palantir",                      "sector": "Yazilim",          "refWeight": 2.00, "refPrice": 178.00 },
-    { "s": "CSCO",  "n": "Cisco",                         "sector": "Donanim",          "refWeight": 1.70, "refPrice": 72.00 },
-    { "s": "AMD",   "n": "AMD",                           "sector": "Yari Iletken",     "refWeight": 1.65, "refPrice": 218.00 },
-    { "s": "TMUS",  "n": "T-Mobile US",                   "sector": "Telekom",          "refWeight": 1.50, "refPrice": 232.00 },
-    { "s": "LIN",   "n": "Linde",                         "sector": "Kimya",            "refWeight": 1.40, "refPrice": 470.00 },
-    { "s": "INTU",  "n": "Intuit",                        "sector": "Yazilim",          "refWeight": 1.30, "refPrice": 690.00 },
-    { "s": "ISRG",  "n": "Intuitive Surgical",            "sector": "Saglik",           "refWeight": 1.25, "refPrice": 545.00 },
-    { "s": "PEP",   "n": "PepsiCo",                       "sector": "Gida-Icecek",      "refWeight": 1.20, "refPrice": 148.00 },
-    { "s": "BKNG",  "n": "Booking Holdings",              "sector": "Seyahat",          "refWeight": 1.15, "refPrice": 5450.00 },
-    { "s": "QCOM",  "n": "Qualcomm",                      "sector": "Yari Iletken",     "refWeight": 1.10, "refPrice": 172.00 },
-    { "s": "ADBE",  "n": "Adobe",                         "sector": "Yazilim",          "refWeight": 1.05, "refPrice": 355.00 },
-    { "s": "TXN",   "n": "Texas Instruments",             "sector": "Yari Iletken",     "refWeight": 1.00, "refPrice": 192.00 },
-    { "s": "AMGN",  "n": "Amgen",                         "sector": "Biyoteknoloji",    "refWeight": 0.98, "refPrice": 288.00 },
-    { "s": "GILD",  "n": "Gilead Sciences",               "sector": "Biyoteknoloji",    "refWeight": 0.92, "refPrice": 118.00 },
-    { "s": "HON",   "n": "Honeywell",                     "sector": "Sanayi",           "refWeight": 0.90, "refPrice": 218.00 },
-    { "s": "AMAT",  "n": "Applied Materials",             "sector": "Yari Iletken",     "refWeight": 0.88, "refPrice": 205.00 },
-    { "s": "CMCSA", "n": "Comcast",                       "sector": "Medya",            "refWeight": 0.85, "refPrice": 34.00 },
-    { "s": "MU",    "n": "Micron Technology",             "sector": "Yari Iletken",     "refWeight": 0.84, "refPrice": 185.00 },
-    { "s": "VRTX",  "n": "Vertex Pharmaceuticals",        "sector": "Biyoteknoloji",    "refWeight": 0.82, "refPrice": 445.00 },
-    { "s": "PANW",  "n": "Palo Alto Networks",            "sector": "Siber Guvenlik",   "refWeight": 0.80, "refPrice": 195.00 },
-    { "s": "ADP",   "n": "Automatic Data Processing",     "sector": "Yazilim",          "refWeight": 0.79, "refPrice": 292.00 },
-    { "s": "ADI",   "n": "Analog Devices",                "sector": "Yari Iletken",     "refWeight": 0.78, "refPrice": 232.00 },
-    { "s": "LRCX",  "n": "Lam Research",                  "sector": "Yari Iletken",     "refWeight": 0.76, "refPrice": 98.00 },
-    { "s": "KLAC",  "n": "KLA Corporation",               "sector": "Yari Iletken",     "refWeight": 0.74, "refPrice": 890.00 },
-    { "s": "CRWD",  "n": "CrowdStrike",                   "sector": "Siber Guvenlik",   "refWeight": 0.72, "refPrice": 465.00 },
-    { "s": "MELI",  "n": "MercadoLibre",                  "sector": "E-Ticaret",        "refWeight": 0.70, "refPrice": 2250.00 },
-    { "s": "SBUX",  "n": "Starbucks",                     "sector": "Restoran",         "refWeight": 0.66, "refPrice": 88.00 },
-    { "s": "INTC",  "n": "Intel",                         "sector": "Yari Iletken",     "refWeight": 0.65, "refPrice": 36.00 },
-    { "s": "CEG",   "n": "Constellation Energy",          "sector": "Enerji",           "refWeight": 0.62, "refPrice": 320.00 },
-    { "s": "APP",   "n": "AppLovin",                      "sector": "Yazilim",          "refWeight": 0.60, "refPrice": 545.00 },
-    { "s": "MDLZ",  "n": "Mondelez",                      "sector": "Gida-Icecek",      "refWeight": 0.58, "refPrice": 62.00 },
-    { "s": "CTAS",  "n": "Cintas",                        "sector": "Sanayi",           "refWeight": 0.56, "refPrice": 198.00 },
-    { "s": "ORLY",  "n": "O'Reilly Automotive",           "sector": "Perakende",        "refWeight": 0.55, "refPrice": 102.00 },
-    { "s": "DASH",  "n": "DoorDash",                      "sector": "Internet",         "refWeight": 0.54, "refPrice": 245.00 },
-    { "s": "MSTR",  "n": "Strategy",                      "sector": "Yazilim",          "refWeight": 0.52, "refPrice": 320.00 },
-    { "s": "ABNB",  "n": "Airbnb",                        "sector": "Seyahat",          "refWeight": 0.50, "refPrice": 128.00 },
-    { "s": "FTNT",  "n": "Fortinet",                      "sector": "Siber Guvenlik",   "refWeight": 0.49, "refPrice": 92.00 },
-    { "s": "MAR",   "n": "Marriott",                      "sector": "Seyahat",          "refWeight": 0.48, "refPrice": 268.00 },
-    { "s": "ARM",   "n": "Arm Holdings",                  "sector": "Yari Iletken",     "refWeight": 0.46, "refPrice": 145.00 },
-    { "s": "SNPS",  "n": "Synopsys",                      "sector": "Yazilim",          "refWeight": 0.45, "refPrice": 450.00 },
-    { "s": "CDNS",  "n": "Cadence Design",                "sector": "Yazilim",          "refWeight": 0.45, "refPrice": 330.00 },
-    { "s": "REGN",  "n": "Regeneron",                     "sector": "Biyoteknoloji",    "refWeight": 0.44, "refPrice": 620.00 },
-    { "s": "ADSK",  "n": "Autodesk",                      "sector": "Yazilim",          "refWeight": 0.43, "refPrice": 290.00 },
-    { "s": "PYPL",  "n": "PayPal",                        "sector": "Fintek",           "refWeight": 0.42, "refPrice": 68.00 },
-    { "s": "CSX",   "n": "CSX",                           "sector": "Tasimacilik",      "refWeight": 0.41, "refPrice": 35.00 },
-    { "s": "ROP",   "n": "Roper Technologies",            "sector": "Yazilim",          "refWeight": 0.40, "refPrice": 480.00 },
-    { "s": "WDAY",  "n": "Workday",                       "sector": "Yazilim",          "refWeight": 0.40, "refPrice": 235.00 },
-    { "s": "MRVL",  "n": "Marvell Technology",            "sector": "Yari Iletken",     "refWeight": 0.39, "refPrice": 88.00 },
-    { "s": "PCAR",  "n": "PACCAR",                        "sector": "Sanayi",           "refWeight": 0.37, "refPrice": 102.00 },
-    { "s": "NXPI",  "n": "NXP Semiconductors",            "sector": "Yari Iletken",     "refWeight": 0.36, "refPrice": 225.00 },
-    { "s": "AEP",   "n": "American Electric Power",       "sector": "Enerji",           "refWeight": 0.35, "refPrice": 118.00 },
-    { "s": "TTD",   "n": "The Trade Desk",                "sector": "Reklam",           "refWeight": 0.34, "refPrice": 52.00 },
-    { "s": "AXON",  "n": "Axon Enterprise",               "sector": "Sanayi",           "refWeight": 0.33, "refPrice": 640.00 },
-    { "s": "MNST",  "n": "Monster Beverage",              "sector": "Gida-Icecek",      "refWeight": 0.32, "refPrice": 68.00 },
-    { "s": "PAYX",  "n": "Paychex",                       "sector": "Yazilim",          "refWeight": 0.32, "refPrice": 132.00 },
-    { "s": "FAST",  "n": "Fastenal",                      "sector": "Sanayi",           "refWeight": 0.31, "refPrice": 46.00 },
-    { "s": "ROST",  "n": "Ross Stores",                   "sector": "Perakende",        "refWeight": 0.31, "refPrice": 152.00 },
-    { "s": "KDP",   "n": "Keurig Dr Pepper",              "sector": "Gida-Icecek",      "refWeight": 0.30, "refPrice": 28.00 },
-    { "s": "ODFL",  "n": "Old Dominion Freight",          "sector": "Tasimacilik",      "refWeight": 0.30, "refPrice": 152.00 },
-    { "s": "EXC",   "n": "Exelon",                        "sector": "Enerji",           "refWeight": 0.30, "refPrice": 44.00 },
-    { "s": "VRSK",  "n": "Verisk Analytics",              "sector": "Veri-Analitik",    "refWeight": 0.29, "refPrice": 262.00 },
-    { "s": "CPRT",  "n": "Copart",                        "sector": "Sanayi",           "refWeight": 0.29, "refPrice": 48.00 },
-    { "s": "DDOG",  "n": "Datadog",                       "sector": "Yazilim",          "refWeight": 0.29, "refPrice": 132.00 },
-    { "s": "CHTR",  "n": "Charter Communications",        "sector": "Medya",            "refWeight": 0.28, "refPrice": 265.00 },
-    { "s": "XEL",   "n": "Xcel Energy",                   "sector": "Enerji",           "refWeight": 0.27, "refPrice": 74.00 },
-    { "s": "EA",    "n": "Electronic Arts",               "sector": "Oyun",             "refWeight": 0.26, "refPrice": 195.00 },
-    { "s": "CTSH",  "n": "Cognizant",                     "sector": "BT Hizmetleri",    "refWeight": 0.25, "refPrice": 78.00 },
-    { "s": "BKR",   "n": "Baker Hughes",                  "sector": "Enerji",           "refWeight": 0.25, "refPrice": 48.00 },
-    { "s": "TEAM",  "n": "Atlassian",                     "sector": "Yazilim",          "refWeight": 0.24, "refPrice": 205.00 },
-    { "s": "IDXX",  "n": "IDEXX Laboratories",            "sector": "Saglik",           "refWeight": 0.23, "refPrice": 605.00 },
-    { "s": "TTWO",  "n": "Take-Two Interactive",          "sector": "Oyun",             "refWeight": 0.22, "refPrice": 225.00 },
-    { "s": "ZS",    "n": "Zscaler",                       "sector": "Siber Guvenlik",   "refWeight": 0.22, "refPrice": 285.00 },
-    { "s": "ON",    "n": "ON Semiconductor",              "sector": "Yari Iletken",     "refWeight": 0.21, "refPrice": 52.00 },
-    { "s": "GEHC",  "n": "GE HealthCare",                 "sector": "Saglik",           "refWeight": 0.21, "refPrice": 78.00 },
-    { "s": "MCHP",  "n": "Microchip Technology",          "sector": "Yari Iletken",     "refWeight": 0.20, "refPrice": 62.00 },
-    { "s": "CDW",   "n": "CDW Corporation",               "sector": "BT Hizmetleri",    "refWeight": 0.20, "refPrice": 168.00 },
-    { "s": "DXCM",  "n": "DexCom",                        "sector": "Saglik",           "refWeight": 0.19, "refPrice": 72.00 },
-    { "s": "LULU",  "n": "Lululemon",                     "sector": "Perakende",        "refWeight": 0.19, "refPrice": 195.00 },
-    { "s": "CSGP",  "n": "CoStar Group",                  "sector": "Veri-Analitik",    "refWeight": 0.18, "refPrice": 78.00 },
-    { "s": "TRI",   "n": "Thomson Reuters",               "sector": "Veri-Analitik",    "refWeight": 0.18, "refPrice": 178.00 },
-    { "s": "MDB",   "n": "MongoDB",                       "sector": "Yazilim",          "refWeight": 0.17, "refPrice": 345.00 },
-    { "s": "BIIB",  "n": "Biogen",                        "sector": "Biyoteknoloji",    "refWeight": 0.16, "refPrice": 148.00 },
-    { "s": "WBD",   "n": "Warner Bros. Discovery",        "sector": "Medya",            "refWeight": 0.16, "refPrice": 22.00 },
-    { "s": "KHC",   "n": "Kraft Heinz",                   "sector": "Gida-Icecek",      "refWeight": 0.15, "refPrice": 26.00 },
-    { "s": "CCEP",  "n": "Coca-Cola Europacific",         "sector": "Gida-Icecek",      "refWeight": 0.15, "refPrice": 92.00 },
-    { "s": "SMCI",  "n": "Super Micro Computer",          "sector": "Donanim",          "refWeight": 0.14, "refPrice": 38.00 },
-    { "s": "ALAB",  "n": "Astera Labs",                   "sector": "Yari Iletken",     "refWeight": 0.13, "refPrice": 145.00 },
-    { "s": "GFS",   "n": "GlobalFoundries",               "sector": "Yari Iletken",     "refWeight": 0.11, "refPrice": 38.00 }
-  ]
+ "source": "user-supplied-components",
+ "asOf": "2026-08-10",
+ "note": "Kullanici tarafindan saglanan NASDAQ-100 agirlik/fiyat anlik goruntusundan uretildi (kaynak kayit: data/ndx-components.tsv). Ortulu pay adedi shares = refWeight / refPrice. Calisma aninda agirlik w = shares * baz / Σ olarak yeniden hesaplanir; fiyatlar refPrice'tan uzaklastikca agirliklar dogru yonde kayar. Invesco QQQ holdings CSV'sine erisilebildiginde tamamen degistirilir. Uretmek icin: node scripts/import-holdings.js",
+ "holdings": [
+  {
+   "s": "NVDA",
+   "n": "Nvidia Corp",
+   "sector": "Yarı İletken",
+   "refWeight": 12.92,
+   "refPrice": 223.96
+  },
+  {
+   "s": "AAPL",
+   "n": "Apple Inc.",
+   "sector": "Donanım",
+   "refWeight": 10.89,
+   "refPrice": 313.33
+  },
+  {
+   "s": "MSFT",
+   "n": "Microsoft Corp",
+   "sector": "Yazılım",
+   "refWeight": 8.84,
+   "refPrice": 499.99
+  },
+  {
+   "s": "AMZN",
+   "n": "Amazon.Com Inc",
+   "sector": "E-Ticaret",
+   "refWeight": 7.05,
+   "refPrice": 274.48
+  },
+  {
+   "s": "GOOGL",
+   "n": "Alphabet Inc. Class A",
+   "sector": "İnternet",
+   "refWeight": 5.31,
+   "refPrice": 354.3
+  },
+  {
+   "s": "GOOG",
+   "n": "Alphabet Inc. Class C",
+   "sector": "İnternet",
+   "refWeight": 4.99,
+   "refPrice": 353.47
+  },
+  {
+   "s": "AVGO",
+   "n": "Broadcom Inc.",
+   "sector": "Yarı İletken",
+   "refWeight": 4.85,
+   "refPrice": 427.76
+  },
+  {
+   "s": "SPCX",
+   "n": "Space Exploration Technologies Class A",
+   "sector": "Havacılık",
+   "refWeight": 4.18,
+   "refPrice": 133.11
+  },
+  {
+   "s": "META",
+   "n": "Meta Platforms Inc. Class A",
+   "sector": "İnternet",
+   "refWeight": 3.59,
+   "refPrice": 592.1
+  },
+  {
+   "s": "TSLA",
+   "n": "Tesla, Inc.",
+   "sector": "Otomotiv",
+   "refWeight": 3.09,
+   "refPrice": 328.58
+  },
+  {
+   "s": "MU",
+   "n": "Micron Technology, Inc.",
+   "sector": "Yarı İletken",
+   "refWeight": 2.36,
+   "refPrice": 877.57
+  },
+  {
+   "s": "WMT",
+   "n": "Walmart Inc.",
+   "sector": "Perakende",
+   "refWeight": 2.12,
+   "refPrice": 111.85
+  },
+  {
+   "s": "AMD",
+   "n": "Advanced Micro Devices",
+   "sector": "Yarı İletken",
+   "refWeight": 1.88,
+   "refPrice": 483.36
+  },
+  {
+   "s": "ASML",
+   "n": "ASML Holding NV",
+   "sector": "Yarı İletken",
+   "refWeight": 1.59,
+   "refPrice": 1740.99
+  },
+  {
+   "s": "INTC",
+   "n": "Intel Corp",
+   "sector": "Yarı İletken",
+   "refWeight": 1.22,
+   "refPrice": 101.65
+  },
+  {
+   "s": "CSCO",
+   "n": "Cisco Systems, Inc.",
+   "sector": "Donanım",
+   "refWeight": 1.14,
+   "refPrice": 121.43
+  },
+  {
+   "s": "AMAT",
+   "n": "Applied Materials Inc",
+   "sector": "Yarı İletken",
+   "refWeight": 1.02,
+   "refPrice": 539.14
+  },
+  {
+   "s": "COST",
+   "n": "Costco Wholesale Corp",
+   "sector": "Perakende",
+   "refWeight": 1,
+   "refPrice": 947.82
+  },
+  {
+   "s": "PLTR",
+   "n": "Palantir Technologies Inc. Class A",
+   "sector": "Yazılım",
+   "refWeight": 0.98,
+   "refPrice": 172.01
+  },
+  {
+   "s": "LRCX",
+   "n": "Lam Research Corp",
+   "sector": "Yarı İletken",
+   "refWeight": 0.93,
+   "refPrice": 311.35
+  },
+  {
+   "s": "NFLX",
+   "n": "NetFlix Inc",
+   "sector": "Medya",
+   "refWeight": 0.74,
+   "refPrice": 74.14
+  },
+  {
+   "s": "ARM",
+   "n": "Arm Holdings plc ADS",
+   "sector": "Yarı İletken",
+   "refWeight": 0.72,
+   "refPrice": 282.57
+  },
+  {
+   "s": "PANW",
+   "n": "Palo Alto Networks, Inc.",
+   "sector": "Siber Güvenlik",
+   "refWeight": 0.71,
+   "refPrice": 363.86
+  },
+  {
+   "s": "TXN",
+   "n": "Texas Instruments Incorporated",
+   "sector": "Yarı İletken",
+   "refWeight": 0.62,
+   "refPrice": 286.08
+  },
+  {
+   "s": "KLAC",
+   "n": "KLA Corporation",
+   "sector": "Yarı İletken",
+   "refWeight": 0.62,
+   "refPrice": 198.11
+  },
+  {
+   "s": "LIN",
+   "n": "Linde plc",
+   "sector": "Kimya",
+   "refWeight": 0.54,
+   "refPrice": 489.98
+  },
+  {
+   "s": "AMGN",
+   "n": "Amgen Inc",
+   "sector": "Biyoteknoloji",
+   "refWeight": 0.53,
+   "refPrice": 410.94
+  },
+  {
+   "s": "CRWD",
+   "n": "CrowdStrike Holdings, Inc. Class A",
+   "sector": "Siber Güvenlik",
+   "refWeight": 0.52,
+   "refPrice": 214.42
+  },
+  {
+   "s": "MRVL",
+   "n": "Marvell Technology, Inc.",
+   "sector": "Yarı İletken",
+   "refWeight": 0.47,
+   "refPrice": 218.72
+  },
+  {
+   "s": "SHOP",
+   "n": "Shopify Inc. Class A",
+   "sector": "E-Ticaret",
+   "refWeight": 0.46,
+   "refPrice": 151.57
+  },
+  {
+   "s": "TMUS",
+   "n": "T-Mobile US, Inc.",
+   "sector": "Telekom",
+   "refWeight": 0.45,
+   "refPrice": 177.19
+  },
+  {
+   "s": "ADI",
+   "n": "Analog Devices, Inc.",
+   "sector": "Yarı İletken",
+   "refWeight": 0.45,
+   "refPrice": 389.93
+  },
+  {
+   "s": "PEP",
+   "n": "PepsiCo, Inc.",
+   "sector": "Gıda-İçecek",
+   "refWeight": 0.45,
+   "refPrice": 139.02
+  },
+  {
+   "s": "STX",
+   "n": "Seagate Technology Holdings PLC",
+   "sector": "Donanım",
+   "refWeight": 0.44,
+   "refPrice": 812.76
+  },
+  {
+   "s": "SNDK",
+   "n": "Sandisk Corporation",
+   "sector": "Donanım",
+   "refWeight": 0.42,
+   "refPrice": 1212.21
+  },
+  {
+   "s": "QCOM",
+   "n": "Qualcomm Inc",
+   "sector": "Yarı İletken",
+   "refWeight": 0.42,
+   "refPrice": 167.86
+  },
+  {
+   "s": "GILD",
+   "n": "Gilead Sciences Inc",
+   "sector": "Biyoteknoloji",
+   "refWeight": 0.39,
+   "refPrice": 133.21
+  },
+  {
+   "s": "WDC",
+   "n": "Western Digital Corp.",
+   "sector": "Donanım",
+   "refWeight": 0.36,
+   "refPrice": 434.3
+  },
+  {
+   "s": "ISRG",
+   "n": "Intuitive Surgical Inc.",
+   "sector": "Sağlık",
+   "refWeight": 0.32,
+   "refPrice": 378.81
+  },
+  {
+   "s": "PDD",
+   "n": "PDD Holdings Inc. ADS",
+   "sector": "E-Ticaret",
+   "refWeight": 0.31,
+   "refPrice": 91.76
+  },
+  {
+   "s": "VRTX",
+   "n": "Vertex Pharmaceuticals Inc",
+   "sector": "Biyoteknoloji",
+   "refWeight": 0.3,
+   "refPrice": 496.07
+  },
+  {
+   "s": "SBUX",
+   "n": "Starbucks Corp",
+   "sector": "Restoran",
+   "refWeight": 0.29,
+   "refPrice": 105.58
+  },
+  {
+   "s": "FTNT",
+   "n": "Fortinet, Inc.",
+   "sector": "Siber Güvenlik",
+   "refWeight": 0.28,
+   "refPrice": 159.64
+  },
+  {
+   "s": "APP",
+   "n": "Applovin Corporation Class A",
+   "sector": "Yazılım",
+   "refWeight": 0.28,
+   "refPrice": 346.8
+  },
+  {
+   "s": "ADP",
+   "n": "Automatic Data Processing",
+   "sector": "Yazılım",
+   "refWeight": 0.26,
+   "refPrice": 271.32
+  },
+  {
+   "s": "ABNB",
+   "n": "Airbnb, Inc. Class A",
+   "sector": "Seyahat",
+   "refWeight": 0.25,
+   "refPrice": 178.07
+  },
+  {
+   "s": "ADBE",
+   "n": "Adobe Inc.",
+   "sector": "Yazılım",
+   "refWeight": 0.25,
+   "refPrice": 265.21
+  },
+  {
+   "s": "CEG",
+   "n": "Constellation Energy Corporation",
+   "sector": "Enerji",
+   "refWeight": 0.23,
+   "refPrice": 269.89
+  },
+  {
+   "s": "DASH",
+   "n": "DoorDash, Inc. Class A",
+   "sector": "İnternet",
+   "refWeight": 0.22,
+   "refPrice": 216.26
+  },
+  {
+   "s": "CDNS",
+   "n": "Cadence Design Systems",
+   "sector": "Yazılım",
+   "refWeight": 0.22,
+   "refPrice": 339.24
+  },
+  {
+   "s": "CSX",
+   "n": "CSX Corporation",
+   "sector": "Taşımacılık",
+   "refWeight": 0.22,
+   "refPrice": 50.27
+  },
+  {
+   "s": "MELI",
+   "n": "Mercado Libre, Inc",
+   "sector": "E-Ticaret",
+   "refWeight": 0.22,
+   "refPrice": 1820.69
+  },
+  {
+   "s": "MAR",
+   "n": "Marriott International Class A",
+   "sector": "Seyahat",
+   "refWeight": 0.22,
+   "refPrice": 353.91
+  },
+  {
+   "s": "CMCSA",
+   "n": "Comcast Corp",
+   "sector": "Medya",
+   "refWeight": 0.21,
+   "refPrice": 25.36
+  },
+  {
+   "s": "INTU",
+   "n": "Intuit Inc",
+   "sector": "Yazılım",
+   "refWeight": 0.21,
+   "refPrice": 325.25
+  },
+  {
+   "s": "MNST",
+   "n": "Monster Beverage Corporation",
+   "sector": "Gıda-İçecek",
+   "refWeight": 0.21,
+   "refPrice": 90.36
+  },
+  {
+   "s": "DDOG",
+   "n": "Datadog, Inc. Class A",
+   "sector": "Yazılım",
+   "refWeight": 0.2,
+   "refPrice": 233.93
+  },
+  {
+   "s": "ROST",
+   "n": "Ross Stores Inc",
+   "sector": "Perakende",
+   "refWeight": 0.19,
+   "refPrice": 255.23
+  },
+  {
+   "s": "CTAS",
+   "n": "Cintas Corp",
+   "sector": "Sanayi",
+   "refWeight": 0.19,
+   "refPrice": 203.05
+  },
+  {
+   "s": "REGN",
+   "n": "Regeneron Pharmaceuticals Inc",
+   "sector": "Biyoteknoloji",
+   "refWeight": 0.19,
+   "refPrice": 784.36
+  },
+  {
+   "s": "MDLZ",
+   "n": "Mondelez International, Inc. Class A",
+   "sector": "Gıda-İçecek",
+   "refWeight": 0.19,
+   "refPrice": 62.61
+  },
+  {
+   "s": "SNPS",
+   "n": "Synopsys Inc",
+   "sector": "Yazılım",
+   "refWeight": 0.19,
+   "refPrice": 415.99
+  },
+  {
+   "s": "HON",
+   "n": "Honeywell International, Inc.",
+   "sector": "Sanayi",
+   "refWeight": 0.19,
+   "refPrice": 246.21
+  },
+  {
+   "s": "ORLY",
+   "n": "O'Reilly Automotive, Inc.",
+   "sector": "Perakende",
+   "refWeight": 0.18,
+   "refPrice": 93.53
+  },
+  {
+   "s": "PCAR",
+   "n": "Paccar Inc",
+   "sector": "Sanayi",
+   "refWeight": 0.17,
+   "refPrice": 133.11
+  },
+  {
+   "s": "LITE",
+   "n": "Lumentum Holdings Inc.",
+   "sector": "Yarı İletken",
+   "refWeight": 0.16,
+   "refPrice": 890.17
+  },
+  {
+   "s": "MPWR",
+   "n": "Monolithic Power Systems, Inc.",
+   "sector": "Yarı İletken",
+   "refWeight": 0.16,
+   "refPrice": 1401.54
+  },
+  {
+   "s": "AEP",
+   "n": "American Electric Power Company, Inc.",
+   "sector": "Enerji",
+   "refWeight": 0.16,
+   "refPrice": 125.73
+  },
+  {
+   "s": "WBD",
+   "n": "Warner Bros. Discovery, Inc. Series A",
+   "sector": "Medya",
+   "refWeight": 0.16,
+   "refPrice": 26.78
+  },
+  {
+   "s": "BKR",
+   "n": "Baker Hughes Company",
+   "sector": "Enerji",
+   "refWeight": 0.15,
+   "refPrice": 61.55
+  },
+  {
+   "s": "NXPI",
+   "n": "NXP Semiconductors N.V.",
+   "sector": "Yarı İletken",
+   "refWeight": 0.14,
+   "refPrice": 239.71
+  },
+  {
+   "s": "FAST",
+   "n": "Fastenal Co",
+   "sector": "Sanayi",
+   "refWeight": 0.14,
+   "refPrice": 51.84
+  },
+  {
+   "s": "TER",
+   "n": "Teradyne, Inc.",
+   "sector": "Yarı İletken",
+   "refWeight": 0.14,
+   "refPrice": 379.31
+  },
+  {
+   "s": "ALAB",
+   "n": "Astera Labs, Inc.",
+   "sector": "Yarı İletken",
+   "refWeight": 0.14,
+   "refPrice": 334.17
+  },
+  {
+   "s": "HONA",
+   "n": "Honeywell Aerospace Inc.",
+   "sector": "Havacılık",
+   "refWeight": 0.13,
+   "refPrice": 168.51
+  },
+  {
+   "s": "FANG",
+   "n": "Diamondback Energy, Inc.",
+   "sector": "Enerji",
+   "refWeight": 0.13,
+   "refPrice": 188.04
+  },
+  {
+   "s": "ADSK",
+   "n": "Autodesk Inc",
+   "sector": "Yazılım",
+   "refWeight": 0.13,
+   "refPrice": 249.08
+  },
+  {
+   "s": "RKLB",
+   "n": "Rocket Lab Corporation",
+   "sector": "Havacılık",
+   "refWeight": 0.12,
+   "refPrice": 82.83
+  },
+  {
+   "s": "PYPL",
+   "n": "PayPal Holdings, Inc.",
+   "sector": "Fintek",
+   "refWeight": 0.12,
+   "refPrice": 59.07
+  },
+  {
+   "s": "CRWV",
+   "n": "CoreWeave, Inc. Class A",
+   "sector": "Bulut Altyapı",
+   "refWeight": 0.12,
+   "refPrice": 90.67
+  },
+  {
+   "s": "XEL",
+   "n": "Xcel Energy, Inc.",
+   "sector": "Enerji",
+   "refWeight": 0.12,
+   "refPrice": 78.07
+  },
+  {
+   "s": "FER",
+   "n": "Ferrovial N.V.",
+   "sector": "Altyapı",
+   "refWeight": 0.11,
+   "refPrice": 66.51
+  },
+  {
+   "s": "CCEP",
+   "n": "Coca-Cola Europacific Partners plc",
+   "sector": "Gıda-İçecek",
+   "refWeight": 0.11,
+   "refPrice": 108.29
+  },
+  {
+   "s": "NBIS",
+   "n": "Nebius Group N.V. Class A",
+   "sector": "Bulut Altyapı",
+   "refWeight": 0.11,
+   "refPrice": 187.97
+  },
+  {
+   "s": "EXC",
+   "n": "Exelon Corporation",
+   "sector": "Enerji",
+   "refWeight": 0.11,
+   "refPrice": 45.61
+  },
+  {
+   "s": "AXON",
+   "n": "Axon Enterprise, Inc.",
+   "sector": "Sanayi",
+   "refWeight": 0.11,
+   "refPrice": 571.01
+  },
+  {
+   "s": "IDXX",
+   "n": "Idexx Laboratories Inc",
+   "sector": "Sağlık",
+   "refWeight": 0.11,
+   "refPrice": 586.67
+  },
+  {
+   "s": "TTWO",
+   "n": "Take-Two Interactive Software Inc",
+   "sector": "Oyun",
+   "refWeight": 0.11,
+   "refPrice": 246.5
+  },
+  {
+   "s": "MCHP",
+   "n": "Microchip Technology Inc",
+   "sector": "Yarı İletken",
+   "refWeight": 0.11,
+   "refPrice": 84.69
+  },
+  {
+   "s": "ODFL",
+   "n": "Old Dominion Freight Line",
+   "sector": "Taşımacılık",
+   "refWeight": 0.11,
+   "refPrice": 216.36
+  },
+  {
+   "s": "WDAY",
+   "n": "Workday, Inc. Class A",
+   "sector": "Yazılım",
+   "refWeight": 0.11,
+   "refPrice": 179.64
+  },
+  {
+   "s": "TRI",
+   "n": "Thomson Reuters Corporation",
+   "sector": "Veri-Analitik",
+   "refWeight": 0.11,
+   "refPrice": 101.83
+  },
+  {
+   "s": "PAYX",
+   "n": "Paychex Inc",
+   "sector": "Yazılım",
+   "refWeight": 0.1,
+   "refPrice": 120.04
+  },
+  {
+   "s": "KDP",
+   "n": "Keurig Dr Pepper Inc.",
+   "sector": "Gıda-İçecek",
+   "refWeight": 0.1,
+   "refPrice": 30.01
+  },
+  {
+   "s": "ROP",
+   "n": "Roper Technologies, Inc.",
+   "sector": "Yazılım",
+   "refWeight": 0.09,
+   "refPrice": 402.25
+  },
+  {
+   "s": "MSTR",
+   "n": "Strategy Inc Class A",
+   "sector": "Yazılım",
+   "refWeight": 0.09,
+   "refPrice": 100.01
+  },
+  {
+   "s": "GEHC",
+   "n": "GE HealthCare Technologies Inc.",
+   "sector": "Sağlık",
+   "refWeight": 0.08,
+   "refPrice": 71.77
+  },
+  {
+   "s": "DXCM",
+   "n": "DexCom, Inc.",
+   "sector": "Sağlık",
+   "refWeight": 0.08,
+   "refPrice": 84.75
+  },
+  {
+   "s": "KHC",
+   "n": "The Kraft Heinz Company",
+   "sector": "Gıda-İçecek",
+   "refWeight": 0.07,
+   "refPrice": 25.32
+  },
+  {
+   "s": "ALNY",
+   "n": "Alnylam Pharmaceuticals, Inc.",
+   "sector": "Biyoteknoloji",
+   "refWeight": 0.07,
+   "refPrice": 219.2
+  },
+  {
+   "s": "CPRT",
+   "n": "Copart Inc",
+   "sector": "Sanayi",
+   "refWeight": 0.07,
+   "refPrice": 29.66
+  }
+ ]
 }

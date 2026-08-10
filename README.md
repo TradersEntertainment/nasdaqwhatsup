@@ -1,10 +1,18 @@
 # Nasdaq'ı Kim Taşıyor?
 
 Nasdaq yeşil görünürken takip ettiğiniz hisselerin çoğu kırmızıysa, bu bir
-yanılsama değil. NASDAQ-100 **piyasa değeri ağırlıklı** bir endeks: NVDA tek
-başına ~%9 ağırlığa sahipken sıradaki 50 hissenin toplamı bunun altında
-kalabiliyor. Birkaç mega-cap yükselirken 60+ hisse düşebilir ve endeks yine de
-yeşil kapanır.
+yanılsama değil. NASDAQ-100 **piyasa değeri ağırlıklı** bir endeks ve
+konsantrasyon uçta (10 Ağustos 2026 verisiyle):
+
+| | |
+|---|---|
+| NVDA tek başına | **%12,97** — en küçük **69** hissenin toplamından fazla |
+| İlk 5 hisse | %45,2 |
+| İlk 10 hisse | **%66,0** — endeksin üçte ikisi |
+| En küçük 50 hisse | %7,0 |
+
+Yani birkaç mega-cap yükselirken 60+ hisse düşebilir ve endeks yine de yeşil
+kapanır.
 
 Bu site o dağılımı tek bakışta okunur hale getiriyor. Merkezdeki soru:
 **endeksin bugünkü hareketini kim üretti?**
@@ -68,7 +76,8 @@ npm run fixture            # örnek veri üret
 npm run seed-history       # geçmiş bileşenleri için sahte geçmiş
 FIXTURE_MODE=1 npm start   # http://localhost:3000
 
-npm test                   # 47 test — matematik, seans, ayrıştırma
+npm test                   # 50 test — matematik, seans, ayrıştırma, healthcheck
+npm run import-holdings    # data/ndx-components.tsv -> holdings.seed.json
 npm run doctor             # canlı veri yolunun her adımını dener ve raporlar
 npm run shoot              # her durumun ekran görüntüsü (Playwright)
 ```
@@ -136,7 +145,7 @@ server/     http, poller, depolama, veri kaynakları
 public/     vanilya ES modülleri, el yazımı SVG grafikler
 data/       ağırlık seed'i + örnek veri
 scripts/    fixture, sahte geçmiş, doctor, ekran görüntüsü
-test/       47 test
+test/       50 test
 ```
 
 `shared/` hem Node hem tarayıcı tarafından import edilir (`/shared/` altına
@@ -170,9 +179,14 @@ açık `+/−` işaretleri ve her grafiğin tablo ikizi eşlik ediyor.
 - **Yahoo resmî olmayan bir API.** Katmanlı yedekler var (crumb düşerse v8
   chart yolu, ağırlık kaynağı düşerse önbellek → seed), ama kalıcı çözüm
   anahtarlı bir sağlayıcı olurdu.
-- **`data/holdings.seed.json` yaklaşıktır** — model bilgisinden yazıldı,
-  canlı bir kaynaktan çekilmedi. Invesco'ya ilk başarılı erişimde tamamen
-  değiştirilir. O ana kadar UI "yaklaşık ağırlıklar" uyarısı gösterir.
+- **`data/holdings.seed.json` kullanıcı tarafından sağlanan bir anlık
+  görüntüden üretildi** (`data/ndx-components.tsv`, 10 Ağustos 2026). Ağırlık
+  toplamı %100,01 çıkıyor. Invesco'ya erişilebildiğinde tamamen değiştirilir.
+  Üyelik ve ağırlıklar zamanla eskir; `npm run import-holdings` ile tazelenir.
+- **Kaynak listedeki bir satır bozuktu ve seed'e alınmadı:** BKNG ile CRWD
+  birebir aynı fiyat/değişim/yüzde taşıyordu (kopyalanmış satır). Yanlış fiyat
+  örtülü pay adedini bozup BKNG'yi %0,38 yerine ~%8 gösterirdi.
+  `scripts/import-holdings.js` bu tür iç tutarsızlıkları yakalayıp reddediyor.
 - **Tatil takvimi 2028 sonunda tükeniyor** (`shared/holidays.js`), elle
   güncellenmeli.
 - **Canlı veri yolu bu ortamda test edilemedi.** Ayrıştırma ve seçim mantığı

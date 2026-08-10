@@ -14,6 +14,7 @@
     "fixture": "node scripts/make-fixture.js",
     "seed-history": "node scripts/seed-history.js",
     "doctor": "node scripts/doctor.js",
-    "shoot": "node scripts/shoot.mjs"
+    "shoot": "node scripts/shoot.mjs",
+    "import-holdings": "node scripts/import-holdings.js"
   }
 }

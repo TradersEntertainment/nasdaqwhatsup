@@ -1,0 +1,108 @@
+# NASDAQ-100 bilesenleri — agirlik ve fiyat anlik goruntusu
+# Kaynak: kullanici tarafindan saglandi (2026-08-10, TSI ~11:00)
+# Bu dosya KAYNAK KAYITTIR; scripts/import-holdings.js bundan
+# data/holdings.seed.json uretir. Ortulu pay adedi: shares = weight / price
+#
+# rank	name	symbol	weightPct	price	chg	chgPct
+1	Nvidia Corp	NVDA	12.92	223.96	4.97	2.27
+2	Apple Inc.	AAPL	10.89	313.33	0.92	0.29
+3	Microsoft Corp	MSFT	8.84	499.99	0.13	0.03
+4	Amazon.Com Inc	AMZN	7.05	274.48	2.22	0.82
+5	Alphabet Inc. Class A	GOOGL	5.31	354.30	-3.45	-0.96
+6	Alphabet Inc. Class C	GOOG	4.99	353.47	-3.15	-0.88
+7	Broadcom Inc.	AVGO	4.85	427.76	7.19	1.71
+8	Space Exploration Technologies Class A	SPCX	4.18	133.11	18.19	15.83
+9	Meta Platforms Inc. Class A	META	3.59	592.10	2.20	0.37
+10	Tesla, Inc.	TSLA	3.09	328.58	9.05	2.83
+11	Micron Technology, Inc.	MU	2.36	877.57	-3.90	-0.44
+12	Walmart Inc.	WMT	2.12	111.85	-0.22	-0.20
+13	Advanced Micro Devices	AMD	1.88	483.36	-5.92	-1.21
+14	ASML Holding NV	ASML	1.59	1740.99	36.62	2.15
+15	Intel Corp	INTC	1.22	101.65	1.84	1.84
+16	Cisco Systems, Inc.	CSCO	1.14	121.43	0.55	0.45
+17	Applied Materials Inc	AMAT	1.02	539.14	11.66	2.21
+18	Costco Wholesale Corp	COST	1.00	947.82	-1.33	-0.14
+19	Palantir Technologies Inc. Class A	PLTR	0.98	172.01	16.09	10.32
+20	Lam Research Corp	LRCX	0.93	311.35	5.58	1.82
+21	NetFlix Inc	NFLX	0.74	74.14	0.45	0.61
+22	Arm Holdings plc ADS	ARM	0.72	282.57	-4.11	-1.43
+23	Palo Alto Networks, Inc.	PANW	0.71	363.86	4.37	1.22
+24	Texas Instruments Incorporated	TXN	0.62	286.08	7.68	2.76
+25	KLA Corporation	KLAC	0.62	198.11	4.89	2.53
+26	Linde plc	LIN	0.54	489.98	-0.13	-0.03
+27	Amgen Inc	AMGN	0.53	410.94	6.09	1.51
+28	CrowdStrike Holdings, Inc. Class A	CRWD	0.52	214.42	7.03	3.39
+29	Marvell Technology, Inc.	MRVL	0.47	218.72	8.18	3.89
+30	Shopify Inc. Class A	SHOP	0.46	151.57	4.13	2.80
+31	T-Mobile US, Inc.	TMUS	0.45	177.19	-2.78	-1.54
+32	Analog Devices, Inc.	ADI	0.45	389.93	12.62	3.34
+33	PepsiCo, Inc.	PEP	0.45	139.02	0.58	0.42
+34	Seagate Technology Holdings PLC	STX	0.44	812.76	-40.19	-4.71
+35	Sandisk Corporation	SNDK	0.42	1212.21	-46.37	-3.68
+36	Qualcomm Inc	QCOM	0.42	167.86	7.47	4.66
+37	Gilead Sciences Inc	GILD	0.39	133.21	2.35	1.80
+38	Booking Holdings Inc.	BKNG	0.38	214.42	7.03	3.39
+39	Western Digital Corp.	WDC	0.36	434.30	-17.22	-3.81
+40	Intuitive Surgical Inc.	ISRG	0.32	378.81	5.10	1.36
+41	PDD Holdings Inc. ADS	PDD	0.31	91.76	0.91	1.00
+42	Vertex Pharmaceuticals Inc	VRTX	0.30	496.07	12.04	2.49
+43	Starbucks Corp	SBUX	0.29	105.58	0.42	0.40
+44	Fortinet, Inc.	FTNT	0.28	159.64	-0.47	-0.29
+45	Applovin Corporation Class A	APP	0.28	346.80	11.13	3.32
+46	Automatic Data Processing	ADP	0.26	271.32	-2.19	-0.80
+47	Airbnb, Inc. Class A	ABNB	0.25	178.07	26.43	17.43
+48	Adobe Inc.	ADBE	0.25	265.21	4.97	1.91
+49	Constellation Energy Corporation	CEG	0.23	269.89	8.79	3.37
+50	DoorDash, Inc. Class A	DASH	0.22	216.26	3.00	1.41
+51	Cadence Design Systems	CDNS	0.22	339.24	0.82	0.24
+52	CSX Corporation	CSX	0.22	50.27	-0.43	-0.85
+53	Mercado Libre, Inc	MELI	0.22	1820.69	-9.31	-0.51
+54	Marriott International Class A	MAR	0.22	353.91	-5.76	-1.60
+55	Comcast Corp	CMCSA	0.21	25.36	0.19	0.75
+56	Intuit Inc	INTU	0.21	325.25	3.34	1.04
+57	Monster Beverage Corporation	MNST	0.21	90.36	-3.80	-4.04
+58	Datadog, Inc. Class A	DDOG	0.20	233.93	4.64	2.02
+59	Ross Stores Inc	ROST	0.19	255.23	0.92	0.36
+60	Cintas Corp	CTAS	0.19	203.05	0.90	0.45
+61	Regeneron Pharmaceuticals Inc	REGN	0.19	784.36	12.25	1.59
+62	Mondelez International, Inc. Class A	MDLZ	0.19	62.61	-0.14	-0.22
+63	Synopsys Inc	SNPS	0.19	415.99	10.01	2.47
+64	Honeywell International, Inc.	HON	0.19	246.21	5.47	2.27
+65	O'Reilly Automotive, Inc.	ORLY	0.18	93.53	0.16	0.17
+66	Paccar Inc	PCAR	0.17	133.11	1.05	0.80
+67	Lumentum Holdings Inc.	LITE	0.16	890.17	52.11	6.22
+68	Monolithic Power Systems, Inc.	MPWR	0.16	1401.54	42.46	3.12
+69	American Electric Power Company, Inc.	AEP	0.16	125.73	0.47	0.38
+70	Warner Bros. Discovery, Inc. Series A	WBD	0.16	26.78	0.38	1.44
+71	Baker Hughes Company	BKR	0.15	61.55	-1.20	-1.91
+72	NXP Semiconductors N.V.	NXPI	0.14	239.71	7.93	3.42
+73	Fastenal Co	FAST	0.14	51.84	1.04	2.05
+74	Teradyne, Inc.	TER	0.14	379.31	-5.58	-1.45
+75	Astera Labs, Inc.	ALAB	0.14	334.17	2.67	0.81
+76	Honeywell Aerospace Inc.	HONA	0.13	168.51	12.04	7.69
+77	Diamondback Energy, Inc.	FANG	0.13	188.04	-1.59	-0.84
+78	Autodesk Inc	ADSK	0.13	249.08	6.61	2.73
+79	Rocket Lab Corporation	RKLB	0.12	82.83	7.16	9.46
+80	PayPal Holdings, Inc.	PYPL	0.12	59.07	-0.71	-1.19
+81	CoreWeave, Inc. Class A	CRWV	0.12	90.67	5.34	6.26
+82	Xcel Energy, Inc.	XEL	0.12	78.07	1.10	1.43
+83	Ferrovial N.V.	FER	0.11	66.51	1.12	1.71
+84	Coca-Cola Europacific Partners plc	CCEP	0.11	108.29	0.04	0.04
+85	Nebius Group N.V. Class A	NBIS	0.11	187.97	-1.91	-1.01
+86	Exelon Corporation	EXC	0.11	45.61	0.29	0.64
+87	Axon Enterprise, Inc.	AXON	0.11	571.01	48.55	9.29
+88	Idexx Laboratories Inc	IDXX	0.11	586.67	-3.33	-0.56
+89	Take-Two Interactive Software Inc	TTWO	0.11	246.50	14.03	6.04
+90	Microchip Technology Inc	MCHP	0.11	84.69	10.33	13.89
+91	Old Dominion Freight Line	ODFL	0.11	216.36	4.95	2.34
+92	Workday, Inc. Class A	WDAY	0.11	179.64	9.40	5.52
+93	Thomson Reuters Corporation	TRI	0.11	101.83	1.68	1.68
+94	Paychex Inc	PAYX	0.10	120.04	-0.09	-0.07
+95	Keurig Dr Pepper Inc.	KDP	0.10	30.01	-0.36	-1.19
+96	Roper Technologies, Inc.	ROP	0.09	402.25	5.17	1.30
+97	Strategy Inc Class A	MSTR	0.09	100.01	3.16	3.26
+98	GE HealthCare Technologies Inc.	GEHC	0.08	71.77	1.46	2.08
+99	DexCom, Inc.	DXCM	0.08	84.75	1.73	2.08
+100	The Kraft Heinz Company	KHC	0.07	25.32	0.36	1.44
+101	Alnylam Pharmaceuticals, Inc.	ALNY	0.07	219.20	3.08	1.43
+102	Copart Inc	CPRT	0.07	29.66	0.65	2.24
