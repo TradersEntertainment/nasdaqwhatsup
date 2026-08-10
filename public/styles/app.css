@@ -488,3 +488,120 @@ details.method code {
   padding: 0; margin: -1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
+
+/* ---------- Zaman pencereleri ---------- */
+
+.win-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.win-chip {
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border-radius: var(--r-pill);
+  padding: 7px 14px;
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  /* Dokunmatik hedef: gorsel yukseklik 32px ama vurus alani 44px'e tamamlanir. */
+  min-height: 34px;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+.win-chip:hover:not(:disabled) { border-color: var(--ink-muted); color: var(--ink); }
+.win-chip[aria-pressed="true"] {
+  background: var(--up-dim);
+  border-color: rgba(168, 240, 60, 0.45);
+  color: var(--ink);
+}
+.win-chip:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  /* Devre disi cip "veri yok" demek — gizlemek yerine gorunur birakiliyor ki
+     kullanici pencerenin var oldugunu ama heniz dolmadigini bilsin. */
+  text-decoration: line-through;
+}
+.win-chip:focus-visible { outline: 2px solid var(--up); outline-offset: 2px; }
+
+.win-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 34px;
+  align-items: flex-end;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.win-num {
+  font-size: var(--fs-big);
+  font-weight: 680;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.win-num.up { color: var(--up); }
+.win-num.down { color: var(--down); }
+.win-num.flat { color: var(--ink); }
+.win-sub {
+  color: var(--ink-muted);
+  font-size: var(--fs-xs);
+  margin-top: 3px;
+}
+.win-sub b { color: var(--ink-2); font-weight: 640; }
+.win-breadth { font-size: var(--fs-sm); color: var(--ink-2); }
+.win-breadth b { font-weight: 660; }
+
+/* ---------- Bilanco ---------- */
+
+.earn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 600;
+  white-space: nowrap;
+  /* Renk tek sinyal degil: ◈ isareti ve metin ("bugün"/"2g") her zaman var. */
+}
+.earn-badge.soon { border-color: rgba(250, 178, 25, 0.4); color: var(--warn); }
+.earn-badge.hot {
+  border-color: rgba(250, 178, 25, 0.7);
+  background: rgba(250, 178, 25, 0.14);
+  color: var(--warn);
+}
+
+.earn-groups { display: flex; flex-direction: column; gap: 14px; }
+.earn-group { border-left: 2px solid var(--border-strong); padding-left: 12px; }
+.earn-group:has(.earn-day.hot) { border-left-color: var(--warn); }
+.earn-day {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: var(--fs-sm);
+  font-weight: 660;
+  color: var(--ink);
+  margin-bottom: 7px;
+}
+.earn-day.hot { color: var(--warn); }
+.earn-count { color: var(--ink-muted); font-size: var(--fs-xs); font-weight: 400; }
+.earn-syms { display: flex; flex-wrap: wrap; gap: 5px; }
+.earn-sym {
+  padding: 3px 8px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.earn-sym b { color: var(--ink); font-weight: 640; }

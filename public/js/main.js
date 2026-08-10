@@ -6,6 +6,8 @@ import { connect, fetchIntraday, fetchHistory } from './api.js';
 import { renderHero } from './sections/hero.js';
 import { renderBreadth, renderConcentration, renderCounterfactual, renderLeaderboard, renderLastSession } from './sections/panels.js';
 import { renderTable } from './sections/table.js';
+import { renderWindows, repaintWindowBars } from './sections/windows.js';
+import { renderEarnings } from './sections/earnings.js';
 import { renderBars } from './charts/bars.js';
 import { renderTreemap } from './charts/treemap.js';
 import { renderDivergence } from './charts/lines.js';
@@ -36,6 +38,8 @@ function paintAll() {
   renderLastSession($('last-session'), snap);
   renderHero($('hero'), snap);
   renderBars($('carriers'), snap.constituents);
+  renderWindows($('windows'), snap);
+  renderEarnings($('earnings'), snap);
   renderConcentration($('concentration'), snap);
   renderBreadth($('breadth'), snap);
   renderTreemap($('heatmap'), snap.constituents);
@@ -186,6 +190,7 @@ window.addEventListener('resize', () => {
   rt = setTimeout(() => {
     if (!snap) return;
     renderBars($('carriers'), snap.constituents);
+    repaintWindowBars($('windows'), snap);
     renderTreemap($('heatmap'), snap.constituents);
     renderDivergence($('divergence'), intraday, snap.session);
   }, 180);

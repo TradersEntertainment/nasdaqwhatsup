@@ -14,8 +14,10 @@ import * as store from './store.js';
 import * as history from './history.js';
 import * as storage from './storage.js';
 import { buildSnapshot } from './pipeline/build-snapshot.js';
-import { fetchFixture } from './sources/fixture.js';
-import { sessionEndUtc } from '../shared/session.js';
+import { fetchFixture, fixtureTape, fixtureEarnings } from './sources/fixture.js';
+import * as tape from './pricetape.js';
+import { getEarnings } from './sources/earnings.js';
+import { sessionEndUtc, sessionState } from '../shared/session.js';
 
 let inFlight = false;
 let tick = 0;
@@ -42,6 +44,12 @@ export async function runOnce(reason = 'manual', { fast = false } = {}) {
       ? fetchFixture(tick++)
       : await fetchLive(needBaselineRefresh, fast);
 
+    // Bilanco takvimi: 12 sa onbellekli ve HATA FIRLATMAZ — rozet bir
+    // suslemedir, fiyat akisini dusuremez.
+    const earnings = config.fixtureMode
+      ? fixtureEarnings(raw.rows, sessionState(raw.nowUtc).usDate)
+      : await collectEarnings(raw);
+
     const { snapshot, errors } = buildSnapshot({
       rows: raw.rows,
       ndxBase: raw.ndxBase,
@@ -58,6 +66,10 @@ export async function runOnce(reason = 'manual', { fast = false } = {}) {
       coverage: raw.coverage ?? null,
       // Kaynak kendi esigini soyleyebilir (kripto kismi-kapsam: 5).
       minConstituents: raw.minConstituents ?? (config.fixtureMode ? 50 : 85),
+      // Fixture modunda bant anlik goruntuden TURETILIR: pencere panelinin
+      // dolmasi icin dakikalarca beklenmesin (ekran goruntusu / gorsel denetim).
+      tape: config.fixtureMode ? fixtureTape(raw.rows, raw.nowUtc) : tape.getFrames(),
+      earnings,
     });
 
     if (errors.length) {
@@ -82,6 +94,9 @@ export async function runOnce(reason = 'manual', { fast = false } = {}) {
     }
 
     store.set(snapshot);
+    // Bant anlik goruntu YAYINLANDIKTAN sonra beslenir: degismez kontrolunden
+    // gecmemis bir fiyat seti pencere gecmisini kirletmesin.
+    await tape.push(raw.rows, snapshot.generatedAtMs, snapshot.tsiDay);
     // Hizli gecis gercek bazlari cekmedi; bayragi DUSURME, rafine tur yapsin.
     if (!fast) needBaselineRefresh = false;
     if (!snapshot.coverage?.partial) await history.recordIntraday(snapshot);
@@ -101,6 +116,31 @@ export async function runOnce(reason = 'manual', { fast = false } = {}) {
   } finally {
     inFlight = false;
     scheduleRollover();
+  }
+}
+
+/**
+ * Bilanco takvimini getirip "kalan gun" gosterimine cevirir. Her hata
+ * yutulur: takvim yoksa rozet cikmaz, baska hicbir sey degismez.
+ * @param {any} raw
+ */
+async function collectEarnings(raw) {
+  try {
+    const symbols = raw.rows.map((r) => r.symbol);
+    if (symbols.length === 0) return {};
+    const todayEt = sessionState(raw.nowUtc).usDate;
+    const { map } = await getEarnings(symbols, todayEt);
+    const { describe } = await import('./sources/earnings.js');
+    /** @type {Record<string, any>} */
+    const out = {};
+    for (const s of symbols) {
+      const d = map[s] && describe(map[s], todayEt);
+      if (d) out[s] = d;
+    }
+    return out;
+  } catch (err) {
+    log.debug('bilanco takvimi atlandi', { err: String(err?.message ?? err) });
+    return {};
   }
 }
 
@@ -130,7 +170,11 @@ function scheduleRollover() {
   rolloverTimer.unref?.();
 }
 
-export function start() {
+export async function start() {
+  // Fiyat bandini diskten geri yukle: yeniden baslatma pencereleri
+  // sifirlamasin (4 saatlik pencere yeniden dolmasi 4 saat surerdi).
+  await tape.init().catch(() => 0);
+
   log.info('poller basliyor', {
     intervalMs: config.pollIntervalMs,
     mode: config.fixtureMode ? `fixture:${config.fixtureVariant}` : 'live',

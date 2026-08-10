@@ -9,6 +9,7 @@
  */
 
 import { pct, usd, pctPlain, pp, badgeColor, normalizeSymbol, age } from '../format.js';
+import { earnBadge } from './earnings.js';
 
 const LS_KEY = 'nwu.watchlist.v1';
 
@@ -49,6 +50,7 @@ const COLS = [
   { key: 'contribPts', label: 'Katkı (puan)' },
   { key: 'contribPp', label: 'Katkı (pp)' },
   { key: 'sharePct', label: 'Tarafındaki pay' },
+  { key: 'earnIn', label: 'Bilanço' },
   { key: 'lastTradeAtUtc', label: 'Son işlem' },
 ];
 
@@ -78,7 +80,9 @@ export function renderTable(host, snap) {
   const body = /** @type {HTMLElement} */ (host.querySelector('#tbl-body'));
 
   const paint = () => {
-    let rows = snap.constituents;
+    // Siralanabilir olmasi icin bilanco "kalan gun" sayisi duz alana acilir;
+    // cmp ic ice nesne bilmiyor.
+    let rows = snap.constituents.map((c) => ({ ...c, earnIn: c.earn?.inDays ?? null }));
     if (onlyStarred && stars.size) rows = rows.filter((c) => stars.has(c.s));
     if (query) {
       const q = query.toUpperCase();
@@ -93,7 +97,7 @@ export function renderTable(host, snap) {
 
     body.innerHTML = rows.map((c) => `
       <tr class="${c.traded ? '' : 'muted'}">
-        <td><span class="sym"><i class="badge" style="background:${badgeColor(c.s)}">${c.s.slice(0, 2)}</i>${c.s}</span></td>
+        <td><span class="sym"><i class="badge" style="background:${badgeColor(c.s)}">${c.s.slice(0, 2)}</i>${c.s}${earnBadge(c.earn)}</span></td>
         <td class="name">${escapeHtml(c.n)}</td>
         <td>${usd(c.price)}</td>
         <td class="${cls(c.changePct)}">${pct(c.changePct)}</td>
@@ -103,6 +107,7 @@ export function renderTable(host, snap) {
         <td class="${cls(c.contribPts)}">${c.contribPts.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: 'exceptZero' })}</td>
         <td class="${cls(c.contribPp)}">${pp(c.contribPp)}</td>
         <td>${pctPlain(c.sharePct)}</td>
+        <td>${c.earn ? escapeHtml(c.earn.text.replace('Bilanço ', '')) : '—'}</td>
         <td>${c.traded ? age(Math.round((snap.generatedAtMs - c.lastTradeAtUtc) / 1000)) : 'işlem yok'}</td>
         <td><button class="star" type="button" data-sym="${c.s}"
               aria-pressed="${stars.has(c.s)}"

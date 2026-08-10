@@ -298,7 +298,9 @@ async function tryTradingView(weights, startUtc, nowUtc, st) {
   const symbols = weights.holdings.map((h) => h.s);
 
   let map = tvCache.map;
-  const ttl = st.live ? 60_000 : 15 * 60_000;
+  // 30 sn: poll kadansi 60 sn oldugu icin canli seansta her tur TAZE veri
+  // ister; 60 sn'lik TTL sinirda kalip bazen bayat kare yaziyordu.
+  const ttl = st.live ? 30_000 : 15 * 60_000;
   if (!map || nowUtc - tvCache.at > ttl) {
     try {
       // QQQ da istenir: ucretsiz uclarin hicbiri ^NDX vermiyor, QQQ resmi
@@ -379,7 +381,7 @@ let nasdaqCache = { at: 0, rows: null };
  */
 async function tryNasdaq(weights, nowUtc, st) {
   let rows = nasdaqCache.rows;
-  const ttl = st.live ? 60_000 : 30 * 60_000;
+  const ttl = st.live ? 30_000 : 30 * 60_000;
   if (!rows || nowUtc - nasdaqCache.at > ttl) {
     try {
       const r = await fetchNasdaq100();

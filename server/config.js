@@ -14,7 +14,14 @@ export const config = {
   port: num(process.env.PORT, 3000),
   host: '0.0.0.0',
 
-  pollIntervalMs: num(process.env.POLL_INTERVAL_MS, 5 * 60_000),
+  /**
+   * 60 sn. "Son 1 dakikayi ne tasidi" sorusu ancak dakikalik ornekleme ile
+   * cevaplanabilir. Birincil kaynak (TradingView) poll basina TEK istek
+   * attigi icin bu kadans nazik: gunde ~1440 istek. Yavas kaynaklara
+   * (Finnhub'in 2 dakikalik taramasi gibi) dusuldugunde `inFlight` kilidi
+   * ust uste binmeyi engeller — tur atlanir, sikisma olmaz.
+   */
+  pollIntervalMs: num(process.env.POLL_INTERVAL_MS, 60_000),
 
   /** Yahoo'ya hic cikilmaz; data/fixtures servis edilir. */
   fixtureMode: bool(process.env.FIXTURE_MODE),

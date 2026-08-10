@@ -24,7 +24,7 @@ import { log } from '../lib/log.js';
 
 const LIST_URL = 'https://api.nasdaq.com/api/quote/list-type/nasdaq100';
 
-const BROWSER_HEADERS = {
+export const BROWSER_HEADERS = {
   // User-Agent SART: bu uc, UA'siz istekleri (Node'un varsayilani gibi)
   // dogrudan 403'e dusuruyor. Kullanicinin uretimde calisan projesi ayni
   // basligi kullaniyor — orada yillardir sorunsuz.

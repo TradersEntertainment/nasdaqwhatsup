@@ -31,7 +31,7 @@ export function lastStorageError() {
 
 export async function init() {
   try {
-    for (const d of ['baseline', 'intraday', 'daily']) {
+    for (const d of ['baseline', 'intraday', 'daily', 'tape']) {
       await fs.mkdir(join(base(), d), { recursive: true });
     }
     // Yazilabilirligi gercekten dene — mkdir basarili olup yazma reddedilebilir.
@@ -131,7 +131,7 @@ export async function readJsonl(rel) {
 }
 
 /**
- * @param {'baseline'|'intraday'|'daily'} kind
+ * @param {'baseline'|'intraday'|'daily'|'tape'} kind
  * @returns {Promise<string[]>} TSI gunleri, artan sirada
  */
 export async function listDays(kind) {
@@ -158,6 +158,9 @@ export async function prune() {
     { kind: 'daily', ext: '.json', before: cutoff(config.retainDailyDays) },
     // Baz dosyalari sadece acilis onarimi icin lazim; kisa tutulur.
     { kind: 'baseline', ext: '.json', before: cutoff(7) },
+    // Fiyat bandi yalnizca en uzun pencereyi (4 sa) beslemek icin var; iki
+    // gunden eskisi olu yuktur ve gunde ~2 MB yazar.
+    { kind: 'tape', ext: '.jsonl', before: cutoff(2) },
   ];
 
   let removed = 0;
@@ -179,7 +182,7 @@ export async function stats() {
   let bytes = 0;
   let days = 0;
   try {
-    for (const kind of ['baseline', 'intraday', 'daily']) {
+    for (const kind of ['baseline', 'intraday', 'daily', 'tape']) {
       const dir = join(base(), kind);
       for (const f of await fs.readdir(dir)) {
         const st = await fs.stat(join(dir, f)).catch(() => null);
@@ -196,4 +199,5 @@ export const paths = {
   baseline: (day) => `baseline/${day}.json`,
   intraday: (day) => `intraday/${day}.jsonl`,
   daily: (day) => `daily/${day}.json`,
+  tape: (day) => `tape/${day}.jsonl`,
 };

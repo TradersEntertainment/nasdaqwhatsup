@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import { sessionState } from '../../shared/session.js';
 import { rateLimitInfo } from '../sources/yahoo.js';
 import { discoverEquityMarkets } from '../sources/crypto.js';
+import * as pricetape from '../pricetape.js';
 import { fetchWithTimeout } from '../lib/retry.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -60,6 +61,9 @@ export async function handleApi(req, res, url) {
       mode: config.fixtureMode ? `fixture:${config.fixtureVariant}` : 'live',
       rateLimit: rateLimitInfo(),
       volume: disk,
+      // Pencere bolumunun ne kadar geriye gidebildigi — "4 saat neden kapali?"
+      // sorusu tahminle degil bu alanla cevaplanir.
+      tape: pricetape.info(),
     });
     return true;
   }

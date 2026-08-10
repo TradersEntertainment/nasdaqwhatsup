@@ -74,7 +74,11 @@ async function main() {
     });
   });
 
-  poller.start();
+  // Dinlemeye baslamayi BEKLETMEZ: poller acilis turunu kendi icinde yapar,
+  // healthcheck bu arada 200 doner.
+  poller.start().catch((err) => {
+    log.error('poller baslatilamadi', { err: String(err?.stack ?? err) });
+  });
 }
 
 let shuttingDown = false;

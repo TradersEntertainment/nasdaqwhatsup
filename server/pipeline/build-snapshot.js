@@ -9,6 +9,7 @@
 import { buildIndexMetrics, checkInvariants } from '../../shared/metrics.js';
 import { sessionState } from '../../shared/session.js';
 import { classify, VERDICT_META } from '../../shared/verdict.js';
+import { buildWindows } from '../../shared/windows.js';
 
 /**
  * @param {object} input
@@ -20,6 +21,8 @@ import { classify, VERDICT_META } from '../../shared/verdict.js';
  * @param {object} [input.quality]
  * @param {object|null} [input.coverage] kismi-kapsam bilgisi (crypto yolu)
  * @param {number} [input.minConstituents]
+ * @param {{t: number, p: Record<string, number>}[]} [input.tape] fiyat bandi
+ * @param {Record<string, any>} [input.earnings] sembol -> bilanco kaydi
  * @returns {{snapshot: any, errors: string[]}}
  */
 export function buildSnapshot({
@@ -31,6 +34,8 @@ export function buildSnapshot({
   quality = {},
   coverage = null,
   minConstituents = 85,
+  tape = [],
+  earnings = {},
 }) {
   const session = sessionState(nowUtc);
 
@@ -58,6 +63,7 @@ export function buildSnapshot({
   const round = (v, d) => (v == null ? v : +v.toFixed(d));
   const constituents = m.constituents.map((c) => ({
     ...c,
+    earn: earnings[c.s] ?? null,
     w: round(c.w, 7),
     price: round(c.price, 4),
     baseline: round(c.baseline, 4),
@@ -109,6 +115,16 @@ export function buildSnapshot({
     coverage,
     index: m.index,
     constituents,
+    // Pencere katkilari: "son 1 dk / 5 dk / 15 dk / 1 sa / 4 sa'te endeksi ne
+    // yukseltti". Bant yeterince geriye gitmiyorsa ilgili pencere null kalir —
+    // 2 dakikalik veriyle "son 4 saat" uydurulmaz.
+    // Ham `rows` kullanilir (turetilmis bilesenler degil): pay adetleri
+    // burada zaten dogru olcekte ve pencere agirliklari o adetlerle PENCERE
+    // BASINDAKI fiyattan yeniden hesaplanir.
+    windows: buildWindows({ frames: tape, rows, nowMs: nowUtc, ndxBase, topN: 8 }),
+    earningsSoon: Object.entries(earnings)
+      .map(([s, e]) => ({ s, ...e }))
+      .sort((a, b) => a.inDays - b.inDays || a.s.localeCompare(b.s)),
     counterfactual: m.counterfactual.map((c) => ({
       removeTop: c.removeTop,
       changePct: round(c.changePct, 4),

@@ -27,6 +27,8 @@ Bu site o dağılımı tek bakışta okunur hale getiriyor. Merkezdeki soru:
 |---|---|
 | **Teşhis** | Endeks ne yaptı, kaç hisse kırmızı, eşit ağırlıklı olsaydı ne olurdu |
 | **Endeksi kim taşıyor** | Her hissenin endeks hareketine kattığı puan (ıraksayan çubuklar) |
+| **Son 1 dk / 5 dk / 15 dk / 1 sa / 4 sa** | Seçilen zaman penceresinde endeksi ne taşıdı |
+| **Yaklaşan bilançolar** | Endeksi tek başına taşıyabilecek olaylar, gün gün |
 | **Konsantrasyon** | Yükselişin ne kadarı ilk 5 hisseden geliyor |
 | **Sayı mı, ağırlık mı?** | Aynı piyasa iki ölçüyle: hisse sayısı vs endeks ağırlığı |
 | **Gün içi ıraksama** | Ağırlıklı endeks ile eşit ağırlıklı endeksin gün boyunca ayrışması |
@@ -76,7 +78,7 @@ npm run fixture            # örnek veri üret
 npm run seed-history       # geçmiş bileşenleri için sahte geçmiş
 FIXTURE_MODE=1 npm start   # http://localhost:3000
 
-npm test                   # 50 test — matematik, seans, ayrıştırma, healthcheck
+npm test                   # 132 test — matematik, seans, pencere, ayrıştırma, healthcheck
 npm run import-holdings    # data/ndx-components.tsv -> holdings.seed.json
 npm run doctor             # canlı veri yolunun her adımını dener ve raporlar
 npm run shoot              # her durumun ekran görüntüsü (Playwright)
@@ -171,6 +173,40 @@ evrende **değil**, HIP-3 builder dex'lerinde yaşar (`EQUITY_DEXES`, varsayıla
 **Teşhis uçları:** `/api/tv-probe`, `/api/nasdaq-probe`, `/api/discover`,
 `/api/stooq-probe` — her biri o kaynağın sunucunun kendi ağ konumundan ne
 döndürdüğünü ham olarak gösterir.
+
+### Zaman pencereleri (1 dk / 5 dk / 15 dk / 1 sa / 4 sa)
+
+"Son 15 dakikada endeksi ne taşıdı?" sorusu günlük katkıyla **aynı özdeşlikle**
+hesaplanır; yalnızca baz değişir:
+
+    r_pencere(NDX) = Σ wᵢ(t−Δt) · ( pᵢ(t)/pᵢ(t−Δt) − 1 )
+
+Ağırlıklar da **pencerenin başındaki** fiyatla yeniden hesaplanır. Gün
+başındaki ağırlıkları kullanmak `Σ katkı = endeks hareketi` özdeşliğini sessizce
+bozardı — 4 saatte %5 oynayan bir hissenin ağırlığı da o kadar oynar.
+
+Bunu besleyen şey **fiyat bandı** (`server/pricetape.js`): her poll'da tüm
+sembollerin fiyatı tek kare olarak `tape/<gün>.jsonl`'e yazılır, bellekte son
+~5 saat tutulur, iki günden eskisi budanır (~2 MB/gün). Yeniden başlatmada
+diskten geri yüklenir. Poll aralığı bu yüzden **60 sn**: "son 1 dakika" ancak
+dakikalık örneklemeyle cevaplanabilir ve birincil kaynak poll başına tek istek
+attığı için bu kadans nazik.
+
+Yeterince geriye giden kare yoksa o pencere **kapalı** kalır (çizili çip) —
+2 dakikalık veriyle "son 4 saat" uydurulmaz. `/api/health` içindeki `tape`
+alanı bandın ne kadar geriye gittiğini söyler.
+
+### Bilanço uyarıları
+
+Bilanço günlerinde tek bir hissenin oynaklığı katlanır ve endeksi tek başına
+taşıyabilir — "bunu kim taşıyor?" sorusunun cevabı çoğu zaman budur. Takvim
+TradingView'den (yedeği api.nasdaq.com), **fiyattan ayrı bir istekle** ve 12
+saat önbellekli olarak çekilir. Ayrı olması bilinçli: takvim kolonlarını fiyat
+isteğine eklemek, geçersiz tek bir kolon adının bütün fiyat yolunu 400'e
+düşürmesi demekti. Takvim düşerse rozet çıkmaz, fiyatlar akmaya devam eder.
+
+Tabloda ◈ rozeti kaç gün kaldığını, ok yönü açılış öncesi (↑) mi kapanış
+sonrası (↓) mı olduğunu gösterir; "Bilanço" sütunundan sıralanabilir.
 
 ```
 shared/     matematik + seans mantığı — SUNUCU VE TARAYICI ORTAK, tek kaynak

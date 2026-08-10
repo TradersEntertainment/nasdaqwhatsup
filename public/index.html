@@ -43,6 +43,22 @@
       <div id="carriers"></div>
     </section>
 
+    <section class="card s8" aria-labelledby="h-win">
+      <div class="card-head">
+        <h2 id="h-win">Endeksi ne taşıdı?</h2>
+        <span class="sub">seçtiğiniz zaman penceresindeki katkı — baz, pencerenin başı</span>
+      </div>
+      <div id="windows"></div>
+    </section>
+
+    <section class="card s4" aria-labelledby="h-earn">
+      <div class="card-head">
+        <h2 id="h-earn">Yaklaşan bilançolar</h2>
+        <span class="sub">endeksi tek başına taşıyabilecek olaylar</span>
+      </div>
+      <div id="earnings"></div>
+    </section>
+
     <section class="card s4" aria-labelledby="h-conc">
       <div class="card-head">
         <h2 id="h-conc">Konsantrasyon</h2>
@@ -145,6 +161,21 @@
           <p><b>Genişlik.</b> Seans dışında işlem baskıları seyrektir; hiç baskı
           görmemiş hisseler ayrı bir "işlem yok" kovasında tutulur ve yükselen /
           düşen oranları yalnızca işlem görenler üzerinden hesaplanır.</p>
+
+          <p><b>Zaman pencereleri.</b> "Son 15 dakikada endeksi ne taşıdı?"
+          sorusu, günlük katkıyla aynı özdeşlikle hesaplanır — yalnızca baz
+          değişir: TSİ gece yarısı yerine <i>pencerenin başındaki fiyat</i>.
+          Ağırlıklar da o ana göre yeniden hesaplanır; gün başındaki ağırlıkları
+          kullanmak <code>Σ katkı = endeks hareketi</code> özdeşliğini sessizce
+          bozardı. Sunucu her dakika bir fiyat karesi kaydeder; bir pencere için
+          yeterince geriye giden kare yoksa o pencere <b>kapalı kalır</b> —
+          eksik veriyle sayı üretilmez.</p>
+
+          <p><b>Bilanço uyarısı.</b> Bilanço günlerinde tek bir hissenin
+          oynaklığı katlanır ve endeksi tek başına taşıyabilir. Takvim
+          TradingView'den (yedeği nasdaq.com) günde iki kez çekilir; tablodaki
+          ◈ işareti kaç gün kaldığını, ok yönü ise açılış öncesi (↑) mi kapanış
+          sonrası (↓) mı olduğunu gösterir.</p>
 
           <p><b>Renkler.</b> Yükseliş/düşüş renkleri renk körlüğü simülasyonuyla
           ölçülerek seçildi: klasik finans yeşili ile kırmızısı deuteranopide
