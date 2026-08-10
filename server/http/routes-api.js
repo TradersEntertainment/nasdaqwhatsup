@@ -43,8 +43,11 @@ export async function handleApi(req, res, url) {
   if (p === '/api/health') {
     const h = store.health();
     const disk = await storage.stats();
-    // Anlik goruntu varsa saglikli sayilir. Bayat veri servis etmek hicbir sey
-    // servis etmemekten iyidir — Railway healthcheck'ini bosuna dusurmeyelim.
+    // Healthcheck "surec ayakta ve servis veriyor mu" sorusunu cevaplar,
+    // "veri boru hattı ilk turunu bitirdi mi" sorusunu DEGIL. Ikisini
+    // karistirmak ilk dagitimda replica'nin hic saglikli olmamasina yol acti:
+    // ilk poll 101 chart istegi bekliyor, Railway'in penceresi 60 sn.
+    // Gercek durum govdede `ready` alaninda tasiniyor.
     json(res, h.ok ? 200 : 503, {
       ...h,
       stale: h.ageSec != null && h.ageSec * 1000 > config.staleAfterMs,

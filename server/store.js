@@ -63,10 +63,35 @@ export function subscriberCount() {
   return subscribers.size;
 }
 
+/** Surecin ayaga kalktigi an — "acilis payi" hesabi icin. */
+const bootedAt = Date.now();
+
+/**
+ * Kurtarilamaz sayilma esikleri. Yalnizca bu ucu de saglayan durumda 503
+ * dondurulur, cunku 503 Railway'e "bu replica'yi oldur" demektir ve yeniden
+ * baslatmak Yahoo kesintisini COZMEZ — kotayi yakip durumu kotulestirir.
+ */
+const FATAL_AFTER_MS = 10 * 60_000;
+const FATAL_AFTER_FAILURES = 5;
+
 export function health() {
   const age = ageSec();
+  const ready = current != null;
+  const sinceBoot = Date.now() - bootedAt;
+
+  // Süreç sağlığı ≠ veri hazırlığı. Ilk anlik goruntu 101 chart istegi
+  // beklerken (30-60 sn) surec gayet saglikli; oyle isaretlenmezse Railway
+  // healthcheck'i replica'yi hic ayaga kaldirmaz.
+  const fatal =
+    !ready &&
+    sinceBoot > FATAL_AFTER_MS &&
+    consecutiveFailures >= FATAL_AFTER_FAILURES;
+
   return {
-    ok: current != null,
+    ok: !fatal,
+    ready,
+    fatal,
+    uptimeSec: Math.round(sinceBoot / 1000),
     phase: current?.session?.phase ?? null,
     tsiDay: current?.tsiDay ?? null,
     source: current?.quality?.source ?? null,

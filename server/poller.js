@@ -29,7 +29,7 @@ let needBaselineRefresh = true;
 /**
  * @param {string} reason
  */
-export async function runOnce(reason = 'manual') {
+export async function runOnce(reason = 'manual', { fast = false } = {}) {
   if (inFlight) {
     log.debug('poll atlandi — onceki tur devam ediyor', { reason });
     return;
@@ -40,7 +40,7 @@ export async function runOnce(reason = 'manual') {
   try {
     const raw = config.fixtureMode
       ? fetchFixture(tick++)
-      : await fetchLive(needBaselineRefresh);
+      : await fetchLive(needBaselineRefresh, fast);
 
     const { snapshot, errors } = buildSnapshot({
       rows: raw.rows,
@@ -79,7 +79,8 @@ export async function runOnce(reason = 'manual') {
     }
 
     store.set(snapshot);
-    needBaselineRefresh = false;
+    // Hizli gecis gercek bazlari cekmedi; bayragi DUSURME, rafine tur yapsin.
+    if (!fast) needBaselineRefresh = false;
     await history.recordIntraday(snapshot);
 
     log.info('poll tamam', {
@@ -106,9 +107,9 @@ export async function runOnce(reason = 'manual') {
  * poller bunu yakalayip onceki goruntuyu servis etmeye devam eder.
  * @param {boolean} refreshBaselines
  */
-async function fetchLive(refreshBaselines) {
+async function fetchLive(refreshBaselines, fast) {
   const { fetchLiveRows } = await import('./pipeline/live.js');
-  return fetchLiveRows({ refreshBaselines });
+  return fetchLiveRows({ refreshBaselines, fast });
 }
 
 /** TSI gun devrinde bazlari yeniden cekmek uzere kendini yeniden zamanlar. */
@@ -131,7 +132,16 @@ export function start() {
     intervalMs: config.pollIntervalMs,
     mode: config.fixtureMode ? `fixture:${config.fixtureVariant}` : 'live',
   });
-  runOnce('boot');
+
+  // Iki asamali acilis. Baz fan-out'u 101 istek ve 30-60 sn suruyor; once
+  // yalnizca kotasyonlarla (3 istek, ~2 sn) yayina cikip siteyi doldur,
+  // sonra gercek bazlarla arka planda rafine et.
+  if (config.fixtureMode) {
+    runOnce('boot');
+  } else {
+    runOnce('boot-fast', { fast: true }).then(() => runOnce('boot-refine'));
+  }
+
   intervalTimer = setInterval(() => runOnce('interval'), config.pollIntervalMs);
   intervalTimer.unref?.();
   scheduleRollover();

@@ -106,17 +106,23 @@ async function getBaselines(symbols, startUtc, force) {
 /* ---------- Ana giris ---------- */
 
 /**
- * @param {{refreshBaselines?: boolean}} [opts]
+ * @param {{refreshBaselines?: boolean, fast?: boolean}} [opts]
+ *   fast: baz fan-out'unu ATLA, `regularMarketPreviousClose`'u gecici baz say.
+ *         Acilista site 30-60 sn bos beklemesin diye. Kisin bu deger zaten
+ *         TAM DOGRU (TSI siniri 16:00 ET'ye oturuyor); yazin ~1 saatlik
+ *         after-hours farki tasir ve rafine tur dakikalar icinde duzeltir.
  */
-export async function fetchLiveRows({ refreshBaselines = false } = {}) {
+export async function fetchLiveRows({ refreshBaselines = false, fast = false } = {}) {
   const nowUtc = Date.now();
   const startUtc = sessionStartUtc(nowUtc);
 
   const weights = await getWeights();
   const symbols = weights.holdings.map((h) => h.s);
 
-  const baselines = await getBaselines(symbols, startUtc, refreshBaselines);
   const quotes = await fetchQuotes([...symbols, NDX]);
+  const baselines = fast
+    ? new Map()
+    : await getBaselines(symbols, startUtc, refreshBaselines);
 
   /** @type {string[]} */
   const missing = [];
@@ -175,6 +181,7 @@ export async function fetchLiveRows({ refreshBaselines = false } = {}) {
   const warnings = [];
   if (weights.source !== 'invesco') warnings.push('weights-approx');
   if (missing.length) warnings.push('missing-symbols');
+  if (fast) warnings.push('provisional-baselines');
 
   return {
     rows,

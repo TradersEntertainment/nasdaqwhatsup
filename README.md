@@ -94,7 +94,10 @@ yüzden fixture modu kalıcı bir özellik, geçici bir çözüm değil.
    çalışır; sadece geçmiş ve gün içi seri birikmez.
 4. Ortam değişkeni gerekmez — API anahtarı yok. `.env.example`'daki ayarlar
    isteğe bağlı.
-5. Healthcheck: `/api/health`.
+5. Healthcheck: `/api/health`. Süreç dinlemeye başlar başlamaz 200 döner —
+   veri boru hattının ilk turunu (101 chart isteği) beklemez. Site açılışta
+   önce yalnızca kotasyonlarla (~2 sn) dolar, gerçek baz fiyatlar arka planda
+   birkaç dakika içinde yerine geçer.
 
 ### İlk dağıtımdan sonra kontrol
 
@@ -103,6 +106,8 @@ curl https://<uygulamanız>/api/health
 curl https://<uygulamanız>/api/snapshot | jq '.quality, .index.changePct, .index.trackingErrorPp'
 ```
 
+- `/api/health` **her zaman 200** döner (süreç ayakta olduğu sürece). Veri
+  hazırlığı gövdedeki `ready` alanında; birkaç saniye içinde `true` olmalı.
 - `quality.source == "yahoo"` → canlı veri akıyor.
 - `quality.weightsSource == "invesco"` → gerçek ağırlıklar okundu.
   `"bundled-approx"` görüyorsanız Invesco'ya erişilememiş; site çalışır ama
