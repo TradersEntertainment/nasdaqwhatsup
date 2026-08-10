@@ -33,6 +33,14 @@ export const config = {
   fixturePinClock: bool(process.env.FIXTURE_PIN_CLOCK, true),
 
   /**
+   * Fixture bandini bu kadar dakikaya kirp (0 = tam bant). Soguk baslangic
+   * ekranini — pencerelerin bir kismi heniz acilmamisken — agsiz ve beklemeden
+   * gorebilmek icin. Bu gercek bir kullanici durumu: her yeniden baslatmadan
+   * sonra bant sifirdan doluyor.
+   */
+  fixtureTapeMin: Number(process.env.FIXTURE_TAPE_MIN) || 0,
+
+  /**
    * Canli cekim basarisiz olursa fixture'a dus. URETIMDE KAPALI OLMALI —
    * bozuk bir deploy sessizce sahte fiyat gostermektense gorunur sekilde
    * basarisiz olsun.

@@ -120,7 +120,10 @@ export function fixtureInfo() {
  * @returns {{t: number, p: Record<string, number>}[]}
  */
 export function fixtureTape(rows, nowUtc) {
-  const OFFSETS_MIN = [245, 240, 62, 60, 16, 15, 6, 5, 2, 1];
+  const cap = config.fixtureTapeMin;
+  const OFFSETS_MIN = [245, 240, 62, 60, 16, 15, 6, 5, 2, 1]
+    .filter((m) => !cap || m <= cap);
+  if (OFFSETS_MIN.length === 0) return [];
 
   // Agirlik sirasi: pay adedi x fiyat. Ilk 8 "tasiyici" rolunu ustlenir.
   const ranked = [...rows]

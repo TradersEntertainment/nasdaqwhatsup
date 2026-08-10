@@ -29,11 +29,19 @@ const LABEL = {
 /** "4 sa 12 dk" gibi gercek aralik yazisi. */
 function spanText(ms) {
   const m = Math.round(ms / 60000);
+  if (m < 1) return `${Math.max(1, Math.round(ms / 1000))} sn`;
   if (m < 60) return `${m} dk`;
   const h = Math.floor(m / 60);
   const r = m % 60;
   return r ? `${h} sa ${r} dk` : `${h} sa`;
 }
+
+/**
+ * Bir pencerenin acilmasi icin bandin ne kadar geriye gitmesi gerekiyor.
+ * shared/windows.js'teki `pickFrame` toleransiyla (%50) AYNI esik — iki yerde
+ * farkli sayi tutmak, arayuzun yalan soylemesi demek olurdu.
+ */
+const OPEN_AT = (ms) => ms * 0.5;
 
 /**
  * @param {HTMLElement} host
@@ -43,10 +51,13 @@ export function renderWindows(host, snap) {
   const w = snap.windows ?? {};
   const available = ORDER.filter((k) => w[k]);
 
+  const meta = snap.windowsMeta ?? { spanMs: 0, frames: 0, persisted: false };
+
   if (available.length === 0) {
     host.innerHTML = `<p class="empty">
-      Pencere geçmişi henüz birikmedi. Sunucu her dakika bir kare kaydediyor;
-      ilk pencere birkaç dakika içinde açılır.</p>`;
+      Pencere geçmişi henüz birikmedi. Sunucu her dakika bir fiyat karesi
+      kaydediyor; ilk pencere birkaç dakika içinde açılır.</p>
+      ${diskNote(meta)}`;
     return;
   }
 
@@ -65,10 +76,13 @@ export function renderWindows(host, snap) {
       ${ORDER.map((k) => {
         const d = w[k];
         const on = k === selected;
+        const eksik = OPEN_AT(WIN_MS[k]) - meta.spanMs;
         return `<button type="button" class="win-chip" data-win="${k}"
           aria-pressed="${on}" ${d ? '' : 'disabled'}
-          title="${d ? `gerçek aralık: ${spanText(d.actualMs)}` : 'bu pencere için yeterli geçmiş yok'}"
-        >${label(k)}</button>`;
+          title="${d
+            ? `gerçek aralık: ${spanText(d.actualMs)}`
+            : `geçmiş henüz yetmiyor — yaklaşık ${spanText(Math.max(60000, eksik))} sonra açılır`}"
+        >${d?.approx ? '~' : ''}${label(k)}</button>`;
       }).join('')}
     </div>
     <div class="win-readout">
@@ -87,10 +101,11 @@ export function renderWindows(host, snap) {
       </div>
     </div>
     ${cur.approx ? `<p class="empty" style="text-align:left;padding:0 0 8px">
-      Gerçek aralık <b>${spanText(cur.actualMs)}</b> — bant tam
+      Gerçek aralık <b>${spanText(cur.actualMs)}</b> — geçmiş tam
       ${label(selected)} öncesine ulaşmıyor, en yakın kare kullanıldı.</p>` : ''}
     <div id="win-bars"></div>
     ${verdictLine(cur)}
+    ${closedNote(w, meta)}
   `;
 
   for (const btn of host.querySelectorAll('[data-win]')) {
@@ -112,6 +127,36 @@ export function renderWindows(host, snap) {
 
 function label(k) {
   return LABEL[k]?.[0] ?? k;
+}
+
+/** Pencere sureleri — cip metnini ve "ne zaman acilir" hesabini besler. */
+const WIN_MS = { m1: 60_000, m5: 300_000, m15: 900_000, h1: 3600_000, h4: 14400_000 };
+
+/**
+ * Kapali pencereler icin TEK ve NET aciklama. Onceki surumde cip yalnizca
+ * ustu cizili gorunuyordu; mobilde title ipucu de gorunmedigi icin "tiklanmiyor"
+ * deneyimi veriyordu — sebebi yazmak sart.
+ */
+function closedNote(w, meta) {
+  const kapali = ORDER.filter((k) => !w[k]);
+  if (kapali.length === 0) return '';
+  const list = kapali
+    .map((k) => `<b>${label(k)}</b> ≈${spanText(Math.max(60_000, OPEN_AT(WIN_MS[k]) - meta.spanMs))} sonra`)
+    .join(' · ');
+  return `<p class="empty" style="text-align:left;padding:14px 0 0;border-top:1px solid var(--border);margin-top:12px">
+    Üstü çizili pencereler için yeterli fiyat geçmişi yok — eksik veriyle sayı
+    üretilmiyor. Şu an <b>${spanText(meta.spanMs)}</b>'lık geçmiş var:
+    ${list}.${diskNote(meta)}</p>`;
+}
+
+/**
+ * Kalici disk yoksa pencereler her yeniden baslatmada sifirlanir. Bu, canli
+ * ortamda en cok kafa karistiran davranis — soylenmezse "bozuk" gorunuyor.
+ */
+function diskNote(meta) {
+  if (meta.persisted) return '';
+  return ` <span style="color:var(--warn)">Kalıcı disk bağlı değil; her yeniden
+    başlatmada bu geçmiş sıfırlanıyor.</span>`;
 }
 
 /** Pencereye ozel tek cumlelik teshis. */

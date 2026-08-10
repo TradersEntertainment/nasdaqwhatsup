@@ -192,9 +192,20 @@ diskten geri yüklenir. Poll aralığı bu yüzden **60 sn**: "son 1 dakika" anc
 dakikalık örneklemeyle cevaplanabilir ve birincil kaynak poll başına tek istek
 attığı için bu kadans nazik.
 
-Yeterince geriye giden kare yoksa o pencere **kapalı** kalır (çizili çip) —
-2 dakikalık veriyle "son 4 saat" uydurulmaz. `/api/health` içindeki `tape`
-alanı bandın ne kadar geriye gittiğini söyler.
+Yeterince geriye giden kare yoksa o pencere **kapalı** kalır (üstü çizili çip)
+ve arayüz sebebini yazar: ne kadar geçmiş olduğunu ve her pencerenin yaklaşık
+ne zaman açılacağını. 2 dakikalık veriyle "son 4 saat" uydurulmaz.
+`/api/health` içindeki `tape` alanı aynı bilgiyi makine tarafında verir.
+
+**Kalıcı disk burada kritik.** Volume bağlı değilse bant yalnızca bellekte
+yaşar; her deploy/restart sonrası bütün pencereler kapanır ve 4 saatlik pencere
+yeniden 2 saat bekler. Volume bağlıyken bant `tape/<gün>.jsonl`'den geri
+yüklenir ve pencereler restart'ı görmez. Arayüz disk bağlı değilse bunu turuncu
+uyarıyla söyler. Bant yaklaşık **2 MB/gün** yazar ve iki günden eskisi budanır —
+1 GB'lık bir volume fazlasıyla yeter.
+
+Soğuk başlangıç ekranını ağsız görmek için:
+`FIXTURE_MODE=1 FIXTURE_TAPE_MIN=3 npm start`
 
 ### Bilanço uyarıları
 

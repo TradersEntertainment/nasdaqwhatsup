@@ -69,6 +69,7 @@ export async function runOnce(reason = 'manual', { fast = false } = {}) {
       // Fixture modunda bant anlik goruntuden TURETILIR: pencere panelinin
       // dolmasi icin dakikalarca beklenmesin (ekran goruntusu / gorsel denetim).
       tape: config.fixtureMode ? fixtureTape(raw.rows, raw.nowUtc) : tape.getFrames(),
+      tapePersisted: storage.isAvailable(),
       earnings,
     });
 

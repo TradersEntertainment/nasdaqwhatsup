@@ -22,6 +22,7 @@ import { buildWindows } from '../../shared/windows.js';
  * @param {object|null} [input.coverage] kismi-kapsam bilgisi (crypto yolu)
  * @param {number} [input.minConstituents]
  * @param {{t: number, p: Record<string, number>}[]} [input.tape] fiyat bandi
+ * @param {boolean} [input.tapePersisted] bant diske yaziliyor mu
  * @param {Record<string, any>} [input.earnings] sembol -> bilanco kaydi
  * @returns {{snapshot: any, errors: string[]}}
  */
@@ -35,6 +36,7 @@ export function buildSnapshot({
   coverage = null,
   minConstituents = 85,
   tape = [],
+  tapePersisted = false,
   earnings = {},
 }) {
   const session = sessionState(nowUtc);
@@ -122,6 +124,13 @@ export function buildSnapshot({
     // burada zaten dogru olcekte ve pencere agirliklari o adetlerle PENCERE
     // BASINDAKI fiyattan yeniden hesaplanir.
     windows: buildWindows({ frames: tape, rows, nowMs: nowUtc, ndxBase, topN: 8 }),
+    // Kapali pencerelerin SEBEBI: bant ne kadar geriye gidiyor. Bu olmadan
+    // arayuz "tiklanmiyor" demekten oteye gecemiyor.
+    windowsMeta: {
+      frames: tape.length,
+      spanMs: tape.length ? Math.max(0, nowUtc - tape[0].t) : 0,
+      persisted: tapePersisted,
+    },
     earningsSoon: Object.entries(earnings)
       .map(([s, e]) => ({ s, ...e }))
       .sort((a, b) => a.inDays - b.inDays || a.s.localeCompare(b.s)),
