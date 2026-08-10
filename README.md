@@ -95,9 +95,11 @@ yüzden fixture modu kalıcı bir özellik, geçici bir çözüm değil.
 
 1. Repoyu Railway'e bağlayın. Nixpacks Node'u otomatik algılar; Dockerfile
    gerekmiyor. `PORT` Railway tarafından enjekte edilir.
-2. ⚠️ **Servisi ABD bölgesine alın.** AB çıkış IP'si Yahoo'nun
-   `guce.yahoo.com` onay yönlendirmesini tetikler ve crumb el sıkışmasını
-   bozar. Kod bunu algılayıp gürültülü log basar ve yedek yola düşer.
+2. **Bölge seçimi serbest.** (Eski "ABD'ye alın" tavsiyesi crumb el
+   sıkışması içindi; crumb artık varsayılan kapalı.) Avrupa'nın iki artısı
+   var: taze çıkış IP'si (Yahoo 429 cezası IP itibarına bağlı) ve Binance'in
+   AB'den engelli olmaması (ABD IP'lerine `451` döner). Bölge değişince çıkış
+   IP'leri değişir — redeploy gerekir.
 3. Bir **volume** bağlayın (örn. `/data`). Railway
    `RAILWAY_VOLUME_MOUNT_PATH`'i otomatik verir. Volume olmadan da site
    çalışır; sadece geçmiş ve gün içi seri birikmez.
@@ -139,10 +141,12 @@ Tek uzun ömürlü Node süreci. Sıfır bağımlılık, sıfır derleme adımı
 | 1 | Yahoo `v8/spark` (toplu, anahtarsız) | 1 | 101 hisse |
 | 2 | Yahoo `v8/chart` (sembol başına) | ≤102 | 101 hisse |
 | 3 | Yahoo `v7/quote` (crumb) | 3 | kapalı — `YAHOO_USE_CRUMB=1` |
-| 4 | **Hyperliquid / Binance perp** | ~2 | **kısmi** — yalnızca listelenen hisseler |
+| 4 | **Stooq** (~15 dk gecikmeli) | 1 kotasyon + günde 102 baz | 101 hisse |
+| 5 | **Hyperliquid / Binance perp** | ~2 | **kısmi** — yalnızca listelenen hisseler |
 
 429 görülünce üstel devre kesici devreye girer (5→120 dk) ve o süre Yahoo'ya
-hiç dokunulmaz. 4. basamak *kısmi kapsam* modudur: hüküm PARTIAL'a sabitlenir,
+hiç dokunulmaz. Stooq basamağı gecikmeli ama TAM kapsamdır (genişlik istatistiği çalışır);
+son basamak *kısmi kapsam* modudur: hüküm PARTIAL'a sabitlenir,
 genişlik/eşit-ağırlık istatistikleri gizlenir, kısmi günler geçmişe yazılmaz
 ve arayüz fiyatların perp olduğunu açıkça söyler. Hangi borsanın kullanılacağını
 `/api/discover` ölçer (kesişim + 24s hacim) — tahmin edilmez.

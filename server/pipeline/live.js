@@ -16,6 +16,7 @@ import * as storage from '../storage.js';
 import { paths } from '../storage.js';
 import { fetchQuotes, fetchBaselines, fetchChartAll, fetchSparkAll, pickCurrent } from '../sources/yahoo.js';
 import { discoverEquityMarkets, fetchCryptoPrices, fetchCandleBaseline } from '../sources/crypto.js';
+import { fetchStooqQuotes, fetchStooqBaselines, stooqBlocked, stooqInfo } from '../sources/stooq.js';
 import { pool } from '../lib/retry.js';
 import { fetchHoldings } from '../sources/invesco.js';
 import { sessionStartUtc, tsiDate, sessionState, phaseBoundaries } from '../../shared/session.js';
@@ -81,12 +82,17 @@ let cryptoBaselineCache = null;
  */
 async function getCryptoMap(symbols) {
   const now = Date.now();
-  const ttl = (m) => (m?.venue ? 24 : 6) * 3600_000;
+  // Bos sonuc yalnizca 30 dk saklanir (kesif 2 istek — ucuz) ve surumsuz /
+  // eski onbellekler YOK SAYILIR: kesif mantigi degisince volume'daki eski
+  // "venue:null" kaydi yeni kodu 6 saat kilitliyordu.
+  const MAP_V = 2;
+  const ttl = (m) => (m?.venue ? 24 * 3600_000 : 30 * 60_000);
+  const valid = (m) => m && m.v === MAP_V && now - (m.at ?? 0) < ttl(m);
 
-  if (cryptoMapCache && now - cryptoMapCache.at < ttl(cryptoMapCache)) return cryptoMapCache;
+  if (valid(cryptoMapCache)) return cryptoMapCache;
 
   const saved = await storage.readJson('crypto-map.json');
-  if (saved && now - (saved.at ?? 0) < ttl(saved)) {
+  if (valid(saved)) {
     cryptoMapCache = saved;
     return saved;
   }
@@ -100,12 +106,18 @@ async function getCryptoMap(symbols) {
         entries[m.s] = { market: m.market, rawName: m.rawName, dex: m.dex ?? null };
       }
     }
-    cryptoMapCache = { venue: d.recommended, at: now, entries };
+    cryptoMapCache = { v: 2, venue: d.recommended, at: now, entries,
+      // Teshis: eslesme yoksa iki borsanin da NE dedigini sakla.
+      note: d.recommended ? null : Object.entries(d.venues)
+        .map(([k, v]) => `${k}: ${v.ok ? `${v.matched} eslesme / ${v.totalMarkets} piyasa` : v.error}`)
+        .join(' | '),
+    };
     log.info('kripto piyasa haritasi', {
       venue: d.recommended ?? 'yok', eslesen: Object.keys(entries).length,
+      not: cryptoMapCache.note ?? '-',
     });
   } catch (err) {
-    cryptoMapCache = { venue: null, at: now, entries: {} };
+    cryptoMapCache = { v: 2, venue: null, at: now, entries: {}, note: String(err?.message ?? err) };
     log.warn('kripto kesfi basarisiz', { err: String(err?.message ?? err) });
   }
   await storage.writeJson('crypto-map.json', cryptoMapCache);
@@ -159,16 +171,19 @@ async function getCryptoBaselines(map, startUtc) {
 async function tryCrypto(weights, startUtc, nowUtc) {
   const symbols = weights.holdings.map((h) => h.s);
   const map = await getCryptoMap(symbols);
-  if (!map?.venue || Object.keys(map.entries).length === 0) return null;
+  if (!map?.venue || Object.keys(map.entries).length === 0) {
+    return { ok: false, reason: `kripto: eslesen piyasa yok (${map?.note ?? 'kesif yapilamadi'})` };
+  }
 
   let prices;
   try {
     prices = await fetchCryptoPrices(/** @type {any} */ (map.venue), map.entries);
   } catch (err) {
-    log.warn('kripto fiyatlar alinamadi', { err: String(err?.message ?? err) });
-    return null;
+    return { ok: false, reason: `kripto(${map.venue}): fiyatlar alinamadi — ${String(err?.message ?? err).slice(0, 80)}` };
   }
-  if (prices.size === 0) return null;
+  if (prices.size === 0) {
+    return { ok: false, reason: `kripto(${map.venue}): haritadaki piyasalar fiyat dondurmedi` };
+  }
 
   const baselines = await getCryptoBaselines(/** @type {any} */ (map), startUtc);
 
@@ -199,7 +214,9 @@ async function tryCrypto(weights, startUtc, nowUtc) {
       baselineSource: b ? b.source : 'prev24h-approx',
     });
   }
-  if (rows.length < 5) return null;
+  if (rows.length < 5) {
+    return { ok: false, reason: `kripto(${map.venue}): yalnizca ${rows.length} satir kurulabildi (<5)` };
+  }
 
   // Puan cevrimi icin son bilinen ^NDX kapanisi (Yahoo calisirken yazilir).
   const ref = await storage.readJson('ndx-ref.json');
@@ -209,7 +226,7 @@ async function tryCrypto(weights, startUtc, nowUtc) {
   if (!(ref?.ndxBase > 0)) warnings.push('ndx-ref-approx');
   if (weights.source !== 'invesco') warnings.push('weights-approx');
 
-  return {
+  return { ok: true, raw: {
     rows,
     ndxBase,
     nowUtc,
@@ -230,7 +247,111 @@ async function tryCrypto(weights, startUtc, nowUtc) {
       missing: symbols.filter((s) => !rows.some((r) => r.symbol === s)),
       warnings,
     },
-  };
+  } };
+}
+
+/* ---------- Stooq: gecikmeli ama TAM kapsamli yedek ---------- */
+
+/** Gunluk istek limiti icin kotasyonlar 9 dk onbellekte tutulur. */
+let stooqQuoteCache = { at: 0, map: null };
+/** @type {{day: string, map: Map<string, any>}|null} */
+let stooqBaselineCache = null;
+
+/**
+ * Stooq yolu: ~15 dk gecikmeli ama 101 sembolun TAMAMI — genislik istatistigi
+ * ancak tam kapsamla hesaplanabilir, o yuzden kripto kismi-kapsamindan once.
+ *
+ * @param {{holdings: any[], source: string, asOf: string}} weights
+ * @param {number} startUtc
+ * @param {number} nowUtc
+ * @param {{usDate: string, live: boolean}} st seans durumu
+ */
+async function tryStooq(weights, startUtc, nowUtc, st) {
+  if (stooqBlocked()) {
+    return { ok: false, reason: `stooq: limit sogumasi (${stooqInfo().remainingSec} sn)` };
+  }
+  const symbols = weights.holdings.map((h) => h.s);
+
+  // Kotasyonlar — 9 dk onbellek (limit butcesi ~150 istek/gun).
+  let quotes = stooqQuoteCache.map;
+  if (!quotes || nowUtc - stooqQuoteCache.at > 9 * 60_000) {
+    try {
+      quotes = await fetchStooqQuotes([...symbols, NDX]);
+      stooqQuoteCache = { at: nowUtc, map: quotes };
+    } catch (err) {
+      return { ok: false, reason: `stooq: ${String(err?.message ?? err).slice(0, 80)}` };
+    }
+  }
+
+  // Bazlar — gunde bir, volume'a yazilir.
+  const day = tsiDate(startUtc + 1000);
+  if (stooqBaselineCache?.day !== day) {
+    const rel = `baseline/${day}.stooq.json`;
+    const saved = await storage.readJson(rel);
+    if (saved?.entries?.length) {
+      stooqBaselineCache = { day, map: new Map(saved.entries) };
+    } else {
+      const m = await fetchStooqBaselines([...symbols, NDX], st.usDate);
+      stooqBaselineCache = { day, map: m };
+      await storage.writeJson(rel, { day, entries: [...m] });
+    }
+  }
+  const baselines = stooqBaselineCache.map;
+
+  const rows = [];
+  for (const h of weights.holdings) {
+    const q = quotes.get(h.s);
+    const b = baselines.get(h.s);
+    if (!q || !(b?.baseline > 0)) continue;
+    // Kotasyon tarihi bu seansin ABD gunu degilse hisse bugun HENUZ islem
+    // gormemis demektir (gecikme/kapali piyasa) — fiyat baza esitlenir ve
+    // "islemYok" kovasina duser; sahte sifir-degisim yaratmaz, durust olur.
+    const traded = q.date === st.usDate;
+    rows.push({
+      symbol: h.s,
+      name: h.n ?? h.s,
+      sector: h.sector ?? null,
+      shares: h.shares,
+      baseline: b.baseline,
+      price: traded ? q.price : b.baseline,
+      open: traded ? q.open : null,
+      lastTradeAtUtc: traded ? nowUtc : startUtc - 3600_000,
+      baselineAtUtc: null,
+      baselineSource: b.source,
+    });
+  }
+  if (rows.length < 85) {
+    return { ok: false, reason: `stooq: yalnizca ${rows.length} sembol cozuldu (<85)` };
+  }
+
+  // ^NDX: onceki kapanis, NDX_base tanimimizin birebir kendisi.
+  const ndxQ = quotes.get(NDX);
+  const ndxB = baselines.get(NDX);
+  const ndxBase = ndxB?.baseline ?? null;
+  if (!(ndxBase > 0)) {
+    return { ok: false, reason: 'stooq: ^NDX referansi alinamadi' };
+  }
+  await storage.writeJson('ndx-ref.json', { ndxBase, at: nowUtc });
+
+  const warnings = ['stooq-delayed'];
+  if (weights.source !== 'invesco') warnings.push('weights-approx');
+
+  return { ok: true, raw: {
+    rows,
+    ndxBase,
+    nowUtc,
+    officialRegularPct: ndxQ && ndxQ.date === st.usDate && ndxBase > 0
+      ? +(((ndxQ.price / ndxBase) - 1) * 100).toFixed(4)
+      : null,
+    officialRegularLevel: ndxQ?.date === st.usDate ? ndxQ.price : null,
+    quality: {
+      source: 'stooq',
+      weightsSource: weights.source === 'bundled-approx' ? 'bundled-approx' : weights.source,
+      weightsAsOf: weights.asOf,
+      missing: symbols.filter((s2) => !rows.some((r) => r.symbol === s2)),
+      warnings,
+    },
+  } };
 }
 
 /* ---------- Agirliklar (pay adetleri) ---------- */
@@ -361,11 +482,18 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   // Son care (Yahoo icinde): crumb yolu, yalnizca acikca etkinlestirildiyse.
   const quotes = series ? null : await tryQuotes(all);
   if (!series && !quotes) {
-    // Yahoo'nun hicbir ucu calismadi. Kripto kismi-kapsam yedegini dene —
-    // buyuk hisseler izlenebiliyorsa site karanlik kalmasin.
+    // Yahoo'nun hicbir ucu calismadi. Sirayla: stooq (gecikmeli ama TAM
+    // kapsam) -> kripto (kismi kapsam). Her katmanin basarisizlik SEBEBI
+    // hata mesajina eklenir — "calismadi" teshis icin yetersiz.
+    const stq = await tryStooq(weights, startUtc, nowUtc, st);
+    if (stq.ok) return stq.raw;
+    why.push(stq.reason);
+
     const cr = await tryCrypto(weights, startUtc, nowUtc);
-    if (cr) return cr;
-    throw new Error(`Yahoo erisilemiyor. ${why.join(' || ') || 'sebep bilinmiyor'}`);
+    if (cr.ok) return cr.raw;
+    why.push(cr.reason);
+
+    throw new Error(`Hicbir veri kaynagi calismadi. ${why.join(' || ')}`);
   }
 
   const chart = series;

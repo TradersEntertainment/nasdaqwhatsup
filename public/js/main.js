@@ -82,6 +82,9 @@ function paintChrome() {
   if (q.weightsSource === 'bundled-approx' || q.weightsSource === 'fallback') {
     warns.push('Ağırlıklar <b>yaklaşık</b> — canlı kaynak henüz okunamadı.');
   }
+  if (q.warnings?.includes('stooq-delayed')) {
+    warns.push('Veri kaynağı <b>stooq</b> — fiyatlar ~15 dk gecikmeli olabilir.');
+  }
   if (q.warnings?.includes('provisional-baselines')) {
     warns.push('Baz fiyatlar <b>geçici</b> (önceki kapanış) — gerçek bazlar birkaç dakika içinde yerine geçecek.');
   }
