@@ -7,7 +7,7 @@
  * kullaniciyi TV'deki rakamla karsilastirirken yaniltir.
  */
 
-import { pct, pts, pctPlain, int, tone, ppPlain } from '../format.js';
+import { pct, pp, pts, pctPlain, int, tone, ppPlain } from '../format.js';
 
 /**
  * @param {HTMLElement} host
@@ -18,6 +18,8 @@ export function renderHero(host, snap) {
   const b = i.breadth;
   const v = snap.verdict;
   const t = tone(i.changePct);
+  const cov = snap.coverage;
+  const partial = !!cov?.partial;
 
   const carriers = [...snap.constituents]
     .filter((c) => c.contribPp > 0)
@@ -26,18 +28,33 @@ export function renderHero(host, snap) {
 
   const level = Math.round(i.syntheticLevel).toLocaleString('tr-TR');
 
+  // Kismi kapsamda buyuk rakam ALT KUMENIN getirisidir, NDX degil — etiket
+  // ve alt satir bunu acikca soyler; NDX≈seviye tahmini gosterilmez.
+  const label = partial
+    ? `Kapsanan ${int(cov.count)}/${int(cov.total)} hisse · TSİ seansı`
+    : 'TSİ seansı · seans dışı dahil';
+  const sub = partial
+    ? (cov.contribPpNdx != null
+        ? `endekse yaklaşık katkı ${pp(cov.contribPpNdx)}`
+        : 'kısmi kapsam — endeks seviyesi hesaplanamaz')
+    : `${pts(i.changePts)} endeks puanı · NDX ≈ ${level}`;
+  const official = partial
+    ? `<div class="hero-official">Resmî <b>^NDX</b> şu an alınamıyor — fiyatlar
+         <b>${cov.venue ?? 'kripto'}</b> perp piyasasından.</div>`
+    : officialLine(i);
+
   host.innerHTML = `
     <div class="hero-grid">
       <div>
-        <span class="hero-label">TSİ seansı · seans dışı dahil</span>
+        <span class="hero-label">${label}</span>
         <div class="hero-num num-hero ${t}">${pct(i.changePct)}</div>
-        <div class="hero-label">${pts(i.changePts)} endeks puanı · NDX ≈ ${level}</div>
-        ${officialLine(i)}
+        <div class="hero-label">${sub}</div>
+        ${official}
       </div>
       <div>
         <p class="verdict-title">${v.title}</p>
         <p class="verdict-body">${sentence(snap, carriers)}</p>
-        <div class="hero-stats">${stats(i)}</div>
+        <div class="hero-stats">${stats(i, cov)}</div>
       </div>
     </div>
   `;
@@ -66,6 +83,16 @@ function sentence(snap, carriers) {
   // Metin murekkep token'i giyer, seri rengi degil — renkli bir yazi
   // burada olmayan bir kodlama varmis izlenimi verirdi.
   const names = carriers.map((c) => `<b>${c.s}</b>`).join(', ');
+
+  if (snap.verdict.verdict === 'PARTIAL') {
+    const cov = snap.coverage ?? {};
+    return `Yahoo erişilemediği için yalnızca <b>${int(cov.count)}</b> büyük hisse ` +
+      `izlenebiliyor${cov.weightPct != null ? ` — endeks ağırlığının <b>${pctPlain(cov.weightPct)}</b>'i` : ''}. ` +
+      `Bu hisseler birlikte <b class="${tone(i.changePct)}">${pct(i.changePct)}</b> hareket etti` +
+      `${cov.contribPpNdx != null ? ` ve endekse yaklaşık <b>${ppPlain(cov.contribPpNdx)}</b> kattı` : ''}. ` +
+      `Fiyatlar <b>${cov.venue ?? 'kripto'}</b> perp piyasasından — spot fiyattan sapabilir. ` +
+      `Genişlik ("kaç hisse kırmızı") ve eşit ağırlıklı endeks kısmi kapsamda hesaplanmaz.`;
+  }
 
   if (b.traded < 20) {
     return `Bu seansta sadece <b>${int(b.traded)}</b> hisse işlem gördü ` +
@@ -107,9 +134,28 @@ function sentence(snap, carriers) {
   }
 }
 
-/** @param {any} i */
-function stats(i) {
+/**
+ * @param {any} i
+ * @param {any} [cov]
+ */
+function stats(i, cov) {
   const b = i.breadth;
+  if (cov?.partial) {
+    // Esit agirlik / ortanca 12 hisse uzerinden yanlis mesaj verir; yalnizca
+    // kapsananlar hakkinda durust olan hucreler gosterilir.
+    const cells = [
+      ['Yükselen / Düşen', `${int(b.advancers)} / ${int(b.decliners)}`, ''],
+      ['Kapsanan ağırlık', cov.weightPct != null ? pctPlain(cov.weightPct) : '—', ''],
+      ['Endekse katkı', cov.contribPpNdx != null ? pp(cov.contribPpNdx) : '—',
+        tone(cov.contribPpNdx ?? 0)],
+      ['Yükselişin yarısı', `${int(i.namesToHalfOfUp)} hisse`, ''],
+    ];
+    return cells.map(([k, v2, cls]) => `
+    <div class="stat">
+      <span class="k">${k}</span>
+      <span class="v num-big ${cls}">${v2}</span>
+    </div>`).join('');
+  }
   const cells = [
     ['Eşit ağırlıklı endeks', pct(i.equalWeightPct), tone(i.equalWeightPct)],
     ['Ortanca hisse', pct(i.medianPct), tone(i.medianPct)],

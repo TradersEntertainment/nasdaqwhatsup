@@ -34,7 +34,14 @@ export function renderBreadth(host, snap) {
   const countUp = b.advancers / b.traded;
   const countDown = b.decliners / b.traded;
 
+  const partialNote = snap.coverage?.partial
+    ? `<p class="empty" style="text-align:left;padding:0 0 10px">Kısmi kapsam —
+       oranlar yalnızca izlenen ${int(snap.coverage.count)} hisse üzerinden;
+       endeksin tamamı için genişlik hesaplanamaz.</p>`
+    : '';
+
   host.innerHTML = `
+    ${partialNote}
     ${bar('Hisse sayısıyla', countUp, countDown, `${int(b.advancers)} / ${int(b.decliners)}`)}
     ${bar('Endeks ağırlığıyla', wUp, wDown, `${pctPlain(wUp * 100)} / ${pctPlain(wDown * 100)}`)}
     <p class="verdict-body" style="font-size:var(--fs-sm);margin-top:14px">

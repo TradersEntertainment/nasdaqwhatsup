@@ -1,0 +1,166 @@
+{
+ "label": "partial",
+ "nowUtc": 1786460400000,
+ "ndxBase": 25400,
+ "coverage": {
+  "partial": true,
+  "count": 12,
+  "total": 101,
+  "weightPct": 70.5,
+  "venue": "hyperliquid"
+ },
+ "minConstituents": 5,
+ "qualitySource": "crypto-hyperliquid",
+ "warnings": [
+  "crypto-partial"
+ ],
+ "officialRegularPct": 0.441,
+ "weightsSource": "invesco",
+ "weightsAsOf": "2026-08-10",
+ "rows": [
+  {
+   "symbol": "NVDA",
+   "name": "Nvidia Corp",
+   "sector": "Yarı İletken",
+   "shares": 0.05768887301303804,
+   "baseline": 223.96,
+   "price": 225.87105162736077,
+   "open": 225.3382107209075,
+   "lastTradeAtUtc": 1786451165632,
+   "baselineAtUtc": 1786395540000,
+   "baselineSource": "chart-bar"
+  },
+  {
+   "symbol": "AAPL",
+   "name": "Apple Inc.",
+   "sector": "Donanım",
+   "shares": 0.03475568889030735,
+   "baseline": 313.33,
+   "price": 320.4766417601246,
+   "open": 316.07634537556817,
+   "lastTradeAtUtc": 1786458876607,
+   "baselineAtUtc": 1786395540000,
+   "baselineSource": "chart-bar"
+  },
+  {
+   "symbol": "MSFT",
+   "name": "Microsoft Corp",
+   "sector": "Yazılım",
+   "shares": 0.017680353607072142,
+   "baseline": 499.99,
+   "price": 507.88379415488674,
+   "open": 505.06577065726646,
+   "lastTradeAtUtc": 1786460050095,
+   "baselineAtUtc": 1786395540000,
+   "baselineSource": "chart-bar"
+  },
+  {
+   "symbol": "AMZN",
+   "name": "Amazon.Com Inc",
+   "sector": "E-Ticaret",
+   "shares": 0.025684931506849314,
+   "baseline": 274.48,
+   "price": 277.81015691585304,
+   "open": 275.81012052526256,
+   "lastTradeAtUtc": 1786448051395,
+   "baselineAtUtc": 1786395540000,
+   "baselineSource": "chart-bar"
+  },
+  {
+   "symbol": "GOOGL",
+   "name": "Alphabet Inc. Class A",
+   "sector": "İnternet",
+   "shares": 0.014987298899237932,
+   "baseline": 354.3,
+   "price": 363.4709767538848,
+   "open": 357.68318015764373,
+   "lastTradeAtUtc": 1786456180362,
+   "baselineAtUtc": 1786395540000,
+   "baselineSource": "chart-bar"
+  },
+  {
+   "symbol": "GOOG",
+   "name": "Alphabet Inc. Class C",
+   "sector": "İnternet",
+   "shares": 0.014117181090332984,
+   "baseline": 353.47,
+   "price": 361.3908752617496,
+   "open": 358.08508464377365,
+   "lastTradeAtUtc": 1786453282212,
+   "baselineAtUtc": 1786395540000,
+   "baselineSource": "chart-bar"
+  },
+  {
+   "symbol": "AVGO",
+   "name": "Broadcom Inc.",
+   "sector": "Yarı İletken",
+   "shares": 0.011338133532822143,
+   "baseline": 427.76,
+   "price": 439.1989370765614,
+   "open": 435.1008138559905,
+   "lastTradeAtUtc": 1786441382838,
+   "baselineAtUtc": 1786395540000,
+   "baselineSource": "chart-bar"
+  },
+  {
+   "symbol": "SPCX",
+   "name": "Space Exploration Technologies Class A",
+   "sector": "Havacılık",
+   "shares": 0.03140259935391781,
+   "baseline": 133.11,
+   "price": 136.40878124603873,
+   "open": 134.98252684563442,
+   "lastTradeAtUtc": 1786441486217,
+   "baselineAtUtc": 1786395540000,
+   "baselineSource": "chart-bar"
+  },
+  {
+   "symbol": "META",
+   "name": "Meta Platforms Inc. Class A",
+   "sector": "İnternet",
+   "shares": 0.006063165005911163,
+   "baseline": 592.1,
+   "price": 566.421042385681,
+   "open": 580.2915292859195,
+   "lastTradeAtUtc": 1786453967059,
+   "baselineAtUtc": 1786395540000,
+   "baselineSource": "chart-bar"
+  },
+  {
+   "symbol": "TSLA",
+   "name": "Tesla, Inc.",
+   "sector": "Otomotiv",
+   "shares": 0.00940410250167387,
+   "baseline": 328.58,
+   "price": 325.6009456553938,
+   "open": 326.99251501466165,
+   "lastTradeAtUtc": 1786442574940,
+   "baselineAtUtc": 1786395540000,
+   "baselineSource": "chart-bar"
+  },
+  {
+   "symbol": "MU",
+   "name": "Micron Technology, Inc.",
+   "sector": "Yarı İletken",
+   "shares": 0.002689244162858803,
+   "baseline": 877.57,
+   "price": 846.3556561417098,
+   "open": 865.8668407725446,
+   "lastTradeAtUtc": 1786453700040,
+   "baselineAtUtc": 1786395540000,
+   "baselineSource": "chart-bar"
+  },
+  {
+   "symbol": "WMT",
+   "name": "Walmart Inc.",
+   "sector": "Perakende",
+   "shares": 0.018953956191327673,
+   "baseline": 111.85,
+   "price": 108.59797090258805,
+   "open": 110.21566797471802,
+   "lastTradeAtUtc": 1786454077163,
+   "baselineAtUtc": 1786395540000,
+   "baselineSource": "chart-bar"
+  }
+ ]
+}

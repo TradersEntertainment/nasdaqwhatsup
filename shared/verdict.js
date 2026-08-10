@@ -15,7 +15,7 @@ export const FLAT_PCT = 0.08;
 /** Genislik istatistiginin anlamli olmasi icin gereken en az islem goren hisse. */
 export const MIN_TRADED = 20;
 
-/** @typedef {'MASKED_WEAKNESS'|'MASKED_STRENGTH'|'BROAD_RALLY'|'BROAD_SELLOFF'|'MIXED'|'FLAT'|'QUIET'} Verdict */
+/** @typedef {'MASKED_WEAKNESS'|'MASKED_STRENGTH'|'BROAD_RALLY'|'BROAD_SELLOFF'|'MIXED'|'FLAT'|'QUIET'|'PARTIAL'} Verdict */
 
 /** @type {Record<Verdict, {title: string, tone: 'up'|'down'|'neutral'}>} */
 export const VERDICT_META = {
@@ -26,6 +26,10 @@ export const VERDICT_META = {
   MIXED: { title: 'Karışık seyir', tone: 'neutral' },
   FLAT: { title: 'Endeks yatay', tone: 'neutral' },
   QUIET: { title: 'İşlem yok denecek kadar az', tone: 'neutral' },
+  // Kismi kapsam: veri kaynagi endeksin tamamini veremiyor. Genislik ve esit
+  // agirlik istatistikleri bu modda HESAPLANMAZ — 12 hisseyle "%62 kirmizi"
+  // demek yanlis bir sayiyi dogru gibi gostermek olur.
+  PARTIAL: { title: 'Kısmi kapsam — büyük hisseler görünümü', tone: 'neutral' },
 };
 
 /**

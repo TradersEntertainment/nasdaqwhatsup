@@ -55,8 +55,9 @@ export async function runOnce(reason = 'manual', { fast = false } = {}) {
         // kullanirsa faz ile saat celisir ve geri sayim 24 saati asar.
         clockPinned: config.fixtureMode && config.fixturePinClock,
       },
-      // Fixture'da varyantlar bilincli olarak eksik hisseli olabiliyor.
-      minConstituents: config.fixtureMode ? 50 : 85,
+      coverage: raw.coverage ?? null,
+      // Kaynak kendi esigini soyleyebilir (kripto kismi-kapsam: 5).
+      minConstituents: raw.minConstituents ?? (config.fixtureMode ? 50 : 85),
     });
 
     if (errors.length) {
@@ -64,10 +65,12 @@ export async function runOnce(reason = 'manual', { fast = false } = {}) {
       return;
     }
 
-    // TSI gunu degistiyse onceki gunu kapat (gecmise yaz).
+    // TSI gunu degistiyse onceki gunu kapat (gecmise yaz). Kismi-kapsam
+    // gunleri YAZILMAZ: 12 hisselik bir gunun "genisligi" liderlik tablosunu
+    // ve iraksama gecmisini zehirler.
     const prev = store.get();
     if (prev && prev.tsiDay !== snapshot.tsiDay) {
-      await history.closeDay(prev);
+      if (!prev.coverage?.partial) await history.closeDay(prev);
       await storage.prune();
     }
 
@@ -81,7 +84,7 @@ export async function runOnce(reason = 'manual', { fast = false } = {}) {
     store.set(snapshot);
     // Hizli gecis gercek bazlari cekmedi; bayragi DUSURME, rafine tur yapsin.
     if (!fast) needBaselineRefresh = false;
-    await history.recordIntraday(snapshot);
+    if (!snapshot.coverage?.partial) await history.recordIntraday(snapshot);
 
     log.info('poll tamam', {
       reason,

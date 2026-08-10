@@ -41,7 +41,7 @@ const chromium = loadChromium();
 const OUT = join(ROOT, 'screenshots');
 const VARIANTS = process.argv.slice(2).length
   ? process.argv.slice(2)
-  : ['regular', 'overnight', 'weekend', 'est', 'degraded'];
+  : ['regular', 'overnight', 'weekend', 'est', 'degraded', 'partial'];
 
 const VIEWPORTS = [
   { name: 'masaustu', width: 1440, height: 1100 },

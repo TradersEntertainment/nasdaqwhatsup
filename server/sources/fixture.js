@@ -78,12 +78,16 @@ export function fetchFixture(tick = 0) {
     nowUtc,
     officialRegularPct: f.officialRegularPct ?? null,
     officialRegularLevel: null,
+    // Kismi-kapsam gibi ozel durumlar fixture'dan aynen tasinir ki her UI
+    // durumu agsiz gorulebilsin.
+    coverage: f.coverage ?? null,
+    minConstituents: f.minConstituents,
     quality: {
-      source: 'fixture',
+      source: f.qualitySource ?? 'fixture',
       weightsSource: f.weightsSource ?? 'bundled-approx',
       weightsAsOf: f.weightsAsOf ?? null,
       missing: [],
-      warnings: ['fixture-mode'],
+      warnings: ['fixture-mode', ...(f.warnings ?? [])],
     },
   };
 }

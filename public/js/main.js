@@ -10,7 +10,7 @@ import { renderBars } from './charts/bars.js';
 import { renderTreemap } from './charts/treemap.js';
 import { renderDivergence } from './charts/lines.js';
 import { rampCss } from './charts/scale.js';
-import { tsiTime, tsiDayLabel, until, age, int } from './format.js';
+import { tsiTime, tsiDayLabel, until, age, int, pctPlain } from './format.js';
 
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 
@@ -65,6 +65,14 @@ function paintChrome() {
 
   // Uyarilar gizlenmez — kullanici neye baktigini bilsin.
   const warns = [];
+  const cov = snap.coverage;
+  if (cov?.partial) {
+    warns.push(
+      `⚠︎ <b>Kısmi kapsam:</b> yalnızca <b>${int(cov.count)}/${int(cov.total)}</b> hisse izleniyor` +
+      `${cov.weightPct != null ? ` (endeks ağırlığının ${pctPlain(cov.weightPct)}'i)` : ''} — ` +
+      `fiyatlar <b>${cov.venue ?? 'kripto'}</b> perp piyasasından, spot fiyattan sapabilir.`
+    );
+  }
   if (q.warnings?.includes('fixture-mode')) {
     warns.push('⚠︎ <b>Örnek veri</b> gösteriliyor — canlı fiyat akışı kapalı.');
   }
@@ -77,7 +85,9 @@ function paintChrome() {
   if (q.warnings?.includes('provisional-baselines')) {
     warns.push('Baz fiyatlar <b>geçici</b> (önceki kapanış) — gerçek bazlar birkaç dakika içinde yerine geçecek.');
   }
-  if (q.dropped?.length) {
+  // Kismi kapsamda eksik sembol listesi ZATEN beklenen durum; ayrica
+  // "hesaba katilmadi" demek ayni seyi iki kez soylemek olur.
+  if (q.dropped?.length && !cov?.partial) {
     warns.push(`${int(q.dropped.length)} hisse veri gelmediği için hesaba katılmadı.`);
   }
   $('banner').innerHTML = warns.length

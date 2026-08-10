@@ -132,14 +132,20 @@ curl https://<uygulamanız>/api/snapshot | jq '.quality, .index.changePct, .inde
 
 Tek uzun ömürlü Node süreci. Sıfır bağımlılık, sıfır derleme adımı.
 
-```
-poller (5 dk)  ──► Yahoo v7 toplu kotasyon (3 istek)  ──┐
-baz işi (1/gün)──► Yahoo v8 chart (101 istek)         ──┼──► store ──► SSE + /api
-ağırlık (1/gün)──► Invesco QQQ CSV                    ──┘         └──► volume
-```
+**Veri merdiveni** (ucuzdan pahalıya, tam kapsamdan kısmiye):
 
-5 dakikalık kadansı sürdürülebilir kılan şey iki katmanlılık: pahalı
-sembol-başına yayılım günde 288 değil **1** kez çalışıyor.
+| Sıra | Kaynak | İstek/döngü | Kapsam |
+|---|---|---|---|
+| 1 | Yahoo `v8/spark` (toplu, anahtarsız) | 1 | 101 hisse |
+| 2 | Yahoo `v8/chart` (sembol başına) | ≤102 | 101 hisse |
+| 3 | Yahoo `v7/quote` (crumb) | 3 | kapalı — `YAHOO_USE_CRUMB=1` |
+| 4 | **Hyperliquid / Binance perp** | ~2 | **kısmi** — yalnızca listelenen hisseler |
+
+429 görülünce üstel devre kesici devreye girer (5→120 dk) ve o süre Yahoo'ya
+hiç dokunulmaz. 4. basamak *kısmi kapsam* modudur: hüküm PARTIAL'a sabitlenir,
+genişlik/eşit-ağırlık istatistikleri gizlenir, kısmi günler geçmişe yazılmaz
+ve arayüz fiyatların perp olduğunu açıkça söyler. Hangi borsanın kullanılacağını
+`/api/discover` ölçer (kesişim + 24s hacim) — tahmin edilmez.
 
 ```
 shared/     matematik + seans mantığı — SUNUCU VE TARAYICI ORTAK, tek kaynak

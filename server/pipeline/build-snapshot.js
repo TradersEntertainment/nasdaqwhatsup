@@ -8,7 +8,7 @@
 
 import { buildIndexMetrics, checkInvariants } from '../../shared/metrics.js';
 import { sessionState } from '../../shared/session.js';
-import { classify } from '../../shared/verdict.js';
+import { classify, VERDICT_META } from '../../shared/verdict.js';
 
 /**
  * @param {object} input
@@ -18,6 +18,7 @@ import { classify } from '../../shared/verdict.js';
  * @param {number|null} [input.officialRegularPct]
  * @param {number|null} [input.officialRegularLevel]
  * @param {object} [input.quality]
+ * @param {object|null} [input.coverage] kismi-kapsam bilgisi (crypto yolu)
  * @param {number} [input.minConstituents]
  * @returns {{snapshot: any, errors: string[]}}
  */
@@ -28,6 +29,7 @@ export function buildSnapshot({
   officialRegularPct = null,
   officialRegularLevel = null,
   quality = {},
+  coverage = null,
   minConstituents = 85,
 }) {
   const session = sessionState(nowUtc);
@@ -68,6 +70,21 @@ export function buildSnapshot({
     shareOfNetPct: round(c.shareOfNetPct, 3),
   }));
 
+  // Kismi kapsamda genislik-temelli hukumler gecersiz: 12 hisseyle QUIET ya
+  // da MASKED_* uretmek yaniltir. Hukum PARTIAL'a sabitlenir ve kapsanan
+  // agirligin endekse yaklasik katkisi hesaplanir:
+  //   Σ w_orig·r = altKumeGetirisi × kapsananAgirlikOrani
+  let verdict = classify(m.index);
+  if (coverage?.partial) {
+    verdict = { verdict: 'PARTIAL', ...VERDICT_META.PARTIAL };
+    if (coverage.weightPct != null) {
+      coverage = {
+        ...coverage,
+        contribPpNdx: +(m.index.changePct * (coverage.weightPct / 100)).toFixed(3),
+      };
+    }
+  }
+
   const snapshot = {
     generatedAt: new Date(nowUtc).toISOString(),
     generatedAtMs: nowUtc,
@@ -88,7 +105,8 @@ export function buildSnapshot({
       nextPhaseAtUtc: session.nextPhaseAtUtc,
       nextPhaseLabel: session.nextPhaseLabel,
     },
-    verdict: classify(m.index),
+    verdict,
+    coverage,
     index: m.index,
     constituents,
     counterfactual: m.counterfactual.map((c) => ({

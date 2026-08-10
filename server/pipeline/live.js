@@ -15,6 +15,8 @@ import { log } from '../lib/log.js';
 import * as storage from '../storage.js';
 import { paths } from '../storage.js';
 import { fetchQuotes, fetchBaselines, fetchChartAll, fetchSparkAll, pickCurrent } from '../sources/yahoo.js';
+import { discoverEquityMarkets, fetchCryptoPrices, fetchCandleBaseline } from '../sources/crypto.js';
+import { pool } from '../lib/retry.js';
 import { fetchHoldings } from '../sources/invesco.js';
 import { sessionStartUtc, tsiDate, sessionState, phaseBoundaries } from '../../shared/session.js';
 
@@ -62,6 +64,173 @@ async function tryQuotes(symbols) {
     }
     return null;
   }
+}
+
+/* ---------- Kripto kismi-kapsam yedegi ---------- */
+
+/** @type {{venue: string|null, at: number, entries: Record<string, any>}|null} */
+let cryptoMapCache = null;
+/** @type {{day: string, map: Map<string, any>}|null} */
+let cryptoBaselineCache = null;
+
+/**
+ * Hangi borsada hangi NDX piyasasi var? Gunde bir kesfedilir, volume'a
+ * yazilir. Sonuc bossa 6 saat "yok" olarak onbelleklenir — bos kesfi her
+ * 5 dakikada tekrarlamak iki borsayi da bosuna dover.
+ * @param {string[]} symbols
+ */
+async function getCryptoMap(symbols) {
+  const now = Date.now();
+  const ttl = (m) => (m?.venue ? 24 : 6) * 3600_000;
+
+  if (cryptoMapCache && now - cryptoMapCache.at < ttl(cryptoMapCache)) return cryptoMapCache;
+
+  const saved = await storage.readJson('crypto-map.json');
+  if (saved && now - (saved.at ?? 0) < ttl(saved)) {
+    cryptoMapCache = saved;
+    return saved;
+  }
+
+  try {
+    const d = await discoverEquityMarkets(symbols);
+    /** @type {Record<string, any>} */
+    const entries = {};
+    if (d.recommended) {
+      for (const m of d.venues[d.recommended].symbols) {
+        entries[m.s] = { market: m.market, rawName: m.rawName, dex: m.dex ?? null };
+      }
+    }
+    cryptoMapCache = { venue: d.recommended, at: now, entries };
+    log.info('kripto piyasa haritasi', {
+      venue: d.recommended ?? 'yok', eslesen: Object.keys(entries).length,
+    });
+  } catch (err) {
+    cryptoMapCache = { venue: null, at: now, entries: {} };
+    log.warn('kripto kesfi basarisiz', { err: String(err?.message ?? err) });
+  }
+  await storage.writeJson('crypto-map.json', cryptoMapCache);
+  return cryptoMapCache;
+}
+
+/**
+ * Kapsanan semboller icin TSI bazlari — mum verisinden, gunde bir.
+ * @param {{venue: string, entries: Record<string, any>}} map
+ * @param {number} startUtc
+ */
+async function getCryptoBaselines(map, startUtc) {
+  const day = tsiDate(startUtc + 1000);
+  if (cryptoBaselineCache?.day === day) return cryptoBaselineCache.map;
+
+  const rel = `baseline/${day}.crypto.json`;
+  const saved = await storage.readJson(rel);
+  if (saved?.entries?.length) {
+    cryptoBaselineCache = { day, map: new Map(saved.entries) };
+    return cryptoBaselineCache.map;
+  }
+
+  const syms = Object.keys(map.entries);
+  const settled = await pool(syms, 4, (sym) =>
+    fetchCandleBaseline(/** @type {any} */ (map.venue), map.entries[sym], startUtc),
+  { spacingMs: 150 });
+
+  /** @type {Map<string, any>} */
+  const m = new Map();
+  settled.forEach((r, i) => {
+    if (r.status === 'fulfilled' && r.value) m.set(syms[i], r.value);
+  });
+  cryptoBaselineCache = { day, map: m };
+  await storage.writeJson(rel, { day, entries: [...m] });
+  log.info('kripto bazlar', { day, ok: m.size, toplam: syms.length });
+  return m;
+}
+
+/**
+ * KISMI-KAPSAM yolu. Yahoo'nun hicbir ucu calismadiginda devreye girer.
+ *
+ * Donen anlik goruntu `coverage.partial=true` tasir: arayuz genislik ve esit
+ * agirlik istatistiklerini gizler, "yalnizca N hisse izleniyor" der ve
+ * fiyatlarin perp oldugunu soyler. Kismi gunler GECMISE YAZILMAZ — 12
+ * hisselik bir gunun "genisligi" liderlik tablosunu zehirlemesin.
+ *
+ * @param {{holdings: any[], source: string, asOf: string}} weights
+ * @param {number} startUtc
+ * @param {number} nowUtc
+ */
+async function tryCrypto(weights, startUtc, nowUtc) {
+  const symbols = weights.holdings.map((h) => h.s);
+  const map = await getCryptoMap(symbols);
+  if (!map?.venue || Object.keys(map.entries).length === 0) return null;
+
+  let prices;
+  try {
+    prices = await fetchCryptoPrices(/** @type {any} */ (map.venue), map.entries);
+  } catch (err) {
+    log.warn('kripto fiyatlar alinamadi', { err: String(err?.message ?? err) });
+    return null;
+  }
+  if (prices.size === 0) return null;
+
+  const baselines = await getCryptoBaselines(/** @type {any} */ (map), startUtc);
+
+  const rows = [];
+  let covW = 0, totW = 0;
+  for (const h of weights.holdings) {
+    const pw = Number(h.publishedWeight) || 0;
+    totW += pw;
+    const pm = prices.get(h.s);
+    if (!pm) continue;
+    const b = baselines.get(h.s);
+    // Mum bazi yoksa 24 saat onceki fiyata dusulur — TSI gece yarisi degil,
+    // yaklasik; kaynakta isaretlenir.
+    const baseline = b?.baseline ?? (pm.prevDayPx > 0 ? pm.prevDayPx : null);
+    if (!(baseline > 0) || !(pm.price > 0)) continue;
+    covW += pw;
+    rows.push({
+      symbol: h.s,
+      name: h.n ?? h.s,
+      sector: h.sector ?? null,
+      shares: h.shares,
+      baseline,
+      price: pm.price,
+      open: null,
+      // Perp'ler surekli islem gorur; "islemYok" kovasina dusmesinler.
+      lastTradeAtUtc: nowUtc,
+      baselineAtUtc: b?.at ?? null,
+      baselineSource: b ? b.source : 'prev24h-approx',
+    });
+  }
+  if (rows.length < 5) return null;
+
+  // Puan cevrimi icin son bilinen ^NDX kapanisi (Yahoo calisirken yazilir).
+  const ref = await storage.readJson('ndx-ref.json');
+  const ndxBase = ref?.ndxBase > 0 ? ref.ndxBase : 25400;
+
+  const warnings = ['crypto-partial'];
+  if (!(ref?.ndxBase > 0)) warnings.push('ndx-ref-approx');
+  if (weights.source !== 'invesco') warnings.push('weights-approx');
+
+  return {
+    rows,
+    ndxBase,
+    nowUtc,
+    officialRegularPct: null,
+    officialRegularLevel: null,
+    minConstituents: 5,
+    coverage: {
+      partial: true,
+      count: rows.length,
+      total: weights.holdings.length,
+      weightPct: totW > 0 ? +((covW / totW) * 100).toFixed(1) : null,
+      venue: map.venue,
+    },
+    quality: {
+      source: `crypto-${map.venue}`,
+      weightsSource: weights.source === 'bundled-approx' ? 'bundled-approx' : weights.source,
+      weightsAsOf: weights.asOf,
+      missing: symbols.filter((s) => !rows.some((r) => r.symbol === s)),
+      warnings,
+    },
+  };
 }
 
 /* ---------- Agirliklar (pay adetleri) ---------- */
@@ -189,9 +358,13 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
     }
   }
 
-  // Son care: crumb yolu (yalnizca acikca etkinlestirildiyse).
+  // Son care (Yahoo icinde): crumb yolu, yalnizca acikca etkinlestirildiyse.
   const quotes = series ? null : await tryQuotes(all);
   if (!series && !quotes) {
+    // Yahoo'nun hicbir ucu calismadi. Kripto kismi-kapsam yedegini dene —
+    // buyuk hisseler izlenebiliyorsa site karanlik kalmasin.
+    const cr = await tryCrypto(weights, startUtc, nowUtc);
+    if (cr) return cr;
     throw new Error(`Yahoo erisilemiyor. ${why.join(' || ') || 'sebep bilinmiyor'}`);
   }
 
@@ -262,6 +435,10 @@ export async function fetchLiveRows({ refreshBaselines = false, fast = false } =
   if (!(ndxBase > 0)) {
     throw new Error('^NDX referans seviyesi alinamadi — anlik goruntu kurulamaz');
   }
+
+  // Kripto kismi-kapsam modu Yahoo'suz kalinca puan cevrimi icin bu degeri
+  // okur; her basarili Yahoo turunda tazelenir.
+  await storage.writeJson('ndx-ref.json', { ndxBase, at: nowUtc });
 
   const warnings = [];
   if (seriesVia === 'chart') warnings.push('chart-fallback');

@@ -77,6 +77,11 @@ function makeVariant(cfg) {
 
   let holdings = seed.holdings;
   if (cfg.dropCount) holdings = holdings.slice(0, holdings.length - cfg.dropCount);
+  // keepTop: kripto kismi-kapsam senaryosu — yalnizca en agir N hisse.
+  const fullTotalW = seed.holdings.reduce((s, h) => s + h.refWeight, 0);
+  if (cfg.keepTop) {
+    holdings = [...holdings].sort((a, b) => b.refWeight - a.refWeight).slice(0, cfg.keepTop);
+  }
 
   const totalRefW = holdings.reduce((s, h) => s + h.refWeight, 0);
 
@@ -157,10 +162,24 @@ function makeVariant(cfg) {
     };
   });
 
+  const keptW = +((totalRefW / fullTotalW) * 100).toFixed(1);
+
   return {
     label: cfg.label,
     nowUtc,
     ndxBase: NDX_BASE,
+    ...(cfg.keepTop ? {
+      coverage: {
+        partial: true,
+        count: holdings.length,
+        total: seed.holdings.length,
+        weightPct: keptW,
+        venue: cfg.venue ?? 'hyperliquid',
+      },
+      minConstituents: 5,
+      qualitySource: `crypto-${cfg.venue ?? 'hyperliquid'}`,
+      warnings: ['crypto-partial'],
+    } : {}),
     // Resmi ^NDX ana seans %'si: TSI seansindan gece boslugu kadar farkli.
     officialRegularPct: cfg.tradeActivity === 'full' ? cfg.targetIdxPct * 0.42 : null,
     weightsSource: cfg.dropCount ? 'fallback' : 'invesco',
@@ -197,6 +216,12 @@ const VARIANTS = [
     label: 'est', nowIso: '2026-01-15T20:00:00+03:00',
     targetIdxPct: -0.55, targetEwPct: 0.22, redRatio: 0.38,
     seed: 115, tradeActivity: 'full', carrierDir: -1,
+  },
+  {
+    // Kripto kismi-kapsam: Yahoo yok, yalnizca en agir 12 hisse perp'lerden.
+    label: 'partial', nowIso: '2026-08-11T18:00:00+03:00',
+    targetIdxPct: 1.05, targetEwPct: 0.35, redRatio: 0.33,
+    seed: 777, tradeActivity: 'full', keepTop: 12, venue: 'hyperliquid',
   },
   {
     label: 'degraded', nowIso: '2026-08-11T18:00:00+03:00',
