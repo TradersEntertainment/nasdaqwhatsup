@@ -19,7 +19,7 @@ import { discoverEquityMarkets, fetchCryptoPrices, fetchCandleBaseline } from '.
 import { fetchStooqQuotes, fetchStooqBaselines, stooqBlocked, stooqInfo } from '../sources/stooq.js';
 import { pool } from '../lib/retry.js';
 import { fetchHoldings } from '../sources/invesco.js';
-import { sessionStartUtc, tsiDate, sessionState, phaseBoundaries } from '../../shared/session.js';
+import { sessionStartUtc, tsiDate, sessionState, phaseBoundaries, previousTradingDay } from '../../shared/session.js';
 
 const NDX = '^NDX';
 const WEIGHTS_TTL_MS = 20 * 3600_000;
@@ -68,6 +68,24 @@ async function tryQuotes(symbols) {
 }
 
 /* ---------- Kripto kismi-kapsam yedegi ---------- */
+
+/**
+ * Ad cakismasi korumasi icin beklenen fiyat araligi.
+ *
+ * Uretimde olculen gercek: Binance'te NDX sembolleriyle "eslesen" 2 piyasa
+ * hisse degil, ayni kisaltmayi tasiyan KRIPTO COINLERDI. Boyle bir coinin
+ * fiyatini hisse fiyati diye gostermek felaket olur. Seed'deki referans
+ * fiyata gore [x0.2, x5] disinda kalan her eslesme cakisma sayilip elenir
+ * (hisse bir gunde 5 katina cikmaz; coin fiyatlari ise bambaska olcekte).
+ */
+let refPriceMap = null;
+function getRefPrices() {
+  if (!refPriceMap) {
+    const seed = JSON.parse(readFileSync(join(ROOT, 'data', 'holdings.seed.json'), 'utf8'));
+    refPriceMap = new Map(seed.holdings.map((h) => [h.s, h.refPrice]));
+  }
+  return refPriceMap;
+}
 
 /** @type {{venue: string|null, at: number, entries: Record<string, any>}|null} */
 let cryptoMapCache = null;
@@ -188,12 +206,18 @@ async function tryCrypto(weights, startUtc, nowUtc) {
   const baselines = await getCryptoBaselines(/** @type {any} */ (map), startUtc);
 
   const rows = [];
-  let covW = 0, totW = 0;
+  let covW = 0, totW = 0, collisions = 0;
   for (const h of weights.holdings) {
     const pw = Number(h.publishedWeight) || 0;
     totW += pw;
     const pm = prices.get(h.s);
     if (!pm) continue;
+    // Ad cakismasi: fiyat, hissenin bilinen olceginden kopuksa bu bir coin.
+    const ref = getRefPrices().get(h.s);
+    if (ref > 0 && (pm.price / ref < 0.2 || pm.price / ref > 5)) {
+      collisions++;
+      continue;
+    }
     const b = baselines.get(h.s);
     // Mum bazi yoksa 24 saat onceki fiyata dusulur — TSI gece yarisi degil,
     // yaklasik; kaynakta isaretlenir.
@@ -215,7 +239,9 @@ async function tryCrypto(weights, startUtc, nowUtc) {
     });
   }
   if (rows.length < 5) {
-    return { ok: false, reason: `kripto(${map.venue}): yalnizca ${rows.length} satir kurulabildi (<5)` };
+    return { ok: false, reason:
+      `kripto(${map.venue}): yalnizca ${rows.length} gercek hisse (<5)` +
+      (collisions ? ` — ${collisions} ad cakismasi elendi (ayni kisaltmali coin)` : '') };
   }
 
   // Puan cevrimi icin son bilinen ^NDX kapanisi (Yahoo calisirken yazilir).
@@ -272,18 +298,34 @@ async function tryStooq(weights, startUtc, nowUtc, st) {
   }
   const symbols = weights.holdings.map((h) => h.s);
 
-  // Kotasyonlar — 9 dk onbellek (limit butcesi ~150 istek/gun).
+  // Kotasyonlar — onbellek suresi istek sayisina gore ayarlanir: tek istekle
+  // calisirken 9 dk, parcali moddayken daha seyrek (gunluk limit butcesi).
   let quotes = stooqQuoteCache.map;
-  if (!quotes || nowUtc - stooqQuoteCache.at > 9 * 60_000) {
+  const ttlMs = Math.max(9, (stooqQuoteCache.requests ?? 1) * 4) * 60_000;
+  if (!quotes || nowUtc - stooqQuoteCache.at > ttlMs) {
     try {
-      quotes = await fetchStooqQuotes([...symbols, NDX]);
-      stooqQuoteCache = { at: nowUtc, map: quotes };
+      const r = await fetchStooqQuotes([...symbols, NDX]);
+      quotes = r.map;
+      stooqQuoteCache = { at: nowUtc, map: quotes, requests: r.requests };
+      // Kendi kendini besleme: bugunun kapanis kotasyonlari, YARININ TSI
+      // bazidir (kisin birebir). Her tazelemede diske yazilir; ertesi gun
+      // bazlar SIFIR ek istekle buradan kurulur.
+      await storage.writeJson('stooq-quotes.json', {
+        at: nowUtc,
+        entries: [...quotes].map(([sym, q]) => [sym, { price: q.price, date: q.date }]),
+      });
     } catch (err) {
       return { ok: false, reason: `stooq: ${String(err?.message ?? err).slice(0, 80)}` };
     }
   }
 
-  // Bazlar — gunde bir, volume'a yazilir.
+  // Bazlar — gunde bir. Kaynak oncelik sirasi:
+  //   1) bu gunun volume dosyasi
+  //   2) dunku kotasyon anlik goruntusu (SIFIR ek istek — onceki islem
+  //      gununun kapanislari zaten elimizde)
+  //   3) q/d/l gunluk-seri yayilimi (102 istek; yalniz soguk baslangicta)
+  //   4) eksik kalanlar icin bugunun ACILISI (gece boslugunu kacirir ama
+  //      hisseyi dusurmekten iyidir; kaynakta isaretlenir)
   const day = tsiDate(startUtc + 1000);
   if (stooqBaselineCache?.day !== day) {
     const rel = `baseline/${day}.stooq.json`;
@@ -291,7 +333,34 @@ async function tryStooq(weights, startUtc, nowUtc, st) {
     if (saved?.entries?.length) {
       stooqBaselineCache = { day, map: new Map(saved.entries) };
     } else {
-      const m = await fetchStooqBaselines([...symbols, NDX], st.usDate);
+      /** @type {Map<string, any>} */
+      const m = new Map();
+
+      const prevDay = previousTradingDay(st.usDate);
+      const snap = await storage.readJson('stooq-quotes.json');
+      if (snap?.entries?.length) {
+        for (const [sym, q] of snap.entries) {
+          if (q?.date === prevDay && q.price > 0) {
+            m.set(sym, { baseline: q.price, date: q.date, source: 'stooq-prev-quote' });
+          }
+        }
+      }
+
+      if (m.size < 85) {
+        const missing = [...symbols, NDX].filter((s2) => !m.has(s2));
+        const fetched = await fetchStooqBaselines(missing, st.usDate);
+        for (const [k, v] of fetched) m.set(k, v);
+      }
+
+      // 4. kademe: hala eksikse bugunun acilisi.
+      for (const s2 of [...symbols, NDX]) {
+        if (m.has(s2)) continue;
+        const q = quotes.get(s2);
+        if (q?.date === st.usDate && q.open > 0) {
+          m.set(s2, { baseline: q.open, date: st.usDate, source: 'stooq-open-approx' });
+        }
+      }
+
       stooqBaselineCache = { day, map: m };
       await storage.writeJson(rel, { day, entries: [...m] });
     }

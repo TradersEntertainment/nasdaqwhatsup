@@ -130,19 +130,70 @@ export function pickPrevClose(rows, usDate) {
 /* ---------------- ag katmani ---------------- */
 
 /**
- * Tum semboller TEK istekte.
+ * Kotasyon URL'si. Virguller LITERAL kalir: encodeURIComponent tum listeyi
+ * %2C'lerle tek dev "sembole" ceviriyordu ve stooq 404 donuyordu — uretimde
+ * yasandi. Sembol karakter kumesi ([a-z0-9.^-]) URL sorgusunda zaten guvenli.
+ * @param {string[]} symbols
+ */
+export function buildQuoteUrl(symbols) {
+  return `${BASE}/q/l/?s=${symbols.map(toStooqSymbol).join(',')}&f=sd2t2ohlcv&h&e=csv`;
+}
+
+/** Ise yaradigi bilinen parca boyutu — ilk basarida ogrenilir, sonra sabit. */
+let preferredChunk = Infinity;
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Kotasyonlar — UYARLANIR parcalama.
+ *
+ * Stooq'un tek istekte kac sembol kabul ettigi belgelenmemis. Once tam liste
+ * denenir; 404/bos gelirse 20'lik, sonra 10'luk parcalara dusulur ve calisan
+ * boyut ezberlenir. Boylece format tahminine kod baglanmiyor — dogrulama
+ * calisma zamaninda, bir kez.
+ *
  * @param {string[]} symbols '^NDX' dahil olabilir
+ * @returns {Promise<{map: Map<string, any>, requests: number}>}
  */
 export async function fetchStooqQuotes(symbols) {
   if (stooqBlocked()) {
     throw Object.assign(new Error('stooq sogumada'), { permanent: true });
   }
-  const s = symbols.map(toStooqSymbol).join(',');
-  const url = `${BASE}/q/l/?s=${encodeURIComponent(s)}&f=sd2t2ohlcv&h&e=csv`;
-  const text = await withRetry(() => getText(url), { tries: 2, label: 'stooq:quotes' });
-  const map = parseQuoteCsv(text);
-  if (map.size === 0) throw new Error('stooq kotasyon CSV bos/taninmadi');
-  return map;
+  const SIZES = [Infinity, 20, 10];
+  let lastErr = null;
+
+  for (let si = Math.max(0, SIZES.indexOf(preferredChunk)); si < SIZES.length; si++) {
+    const size = SIZES[si];
+    const chunks = [];
+    if (size === Infinity) chunks.push(symbols);
+    else for (let i = 0; i < symbols.length; i += size) chunks.push(symbols.slice(i, i + size));
+
+    try {
+      /** @type {Map<string, any>} */
+      const map = new Map();
+      for (const [ci, ch] of chunks.entries()) {
+        if (ci > 0) await sleep(250);
+        const text = await withRetry(() => getText(buildQuoteUrl(ch)), {
+          tries: 1, label: `stooq:q[${size === Infinity ? 'tum' : size}:${ci}]`,
+        });
+        for (const [k, v] of parseQuoteCsv(text)) map.set(k, v);
+      }
+      if (map.size === 0) throw new Error('bos/taninmayan CSV');
+      if (preferredChunk !== size) {
+        log.info('stooq parca boyutu ogrenildi', { boyut: size === Infinity ? 'tum-liste' : size });
+        preferredChunk = size;
+      }
+      return { map, requests: chunks.length };
+    } catch (err) {
+      // Gunluk limit → daha kucuk parca denemek anlamsiz, hemen cik.
+      if (/gunluk istek limiti/.test(String(err?.message))) throw err;
+      lastErr = err;
+      log.debug('stooq boyut denemesi basarisiz, kuculuyor', {
+        boyut: size === Infinity ? 'tum' : size, err: String(err?.message ?? err).slice(0, 80),
+      });
+    }
+  }
+  throw lastErr ?? new Error('stooq kotasyon alinamadi');
 }
 
 /**
