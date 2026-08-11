@@ -15,11 +15,49 @@ let consecutiveFailures = 0;
 /** @type {string[]} */
 let lastErrors = [];
 
+/**
+ * Ikincil endeksler (spx, dji). Birincil (ndx) `current`'ta kalir: onun
+ * saglik/hata muhasebesi Railway healthcheck'ini besliyor ve yan endekslerin
+ * basarisizligi ana sinyali kirletmemeli.
+ * @type {Map<string, any>}
+ */
+const others = new Map();
+
 /** @type {Set<(snap: any) => void>} */
 const subscribers = new Set();
 
 export function get() {
   return current;
+}
+
+/**
+ * @param {string} key
+ * @returns {any|null}
+ */
+export function getIndex(key) {
+  if (!key || key === 'ndx') return current;
+  return others.get(key) ?? null;
+}
+
+/** Hangi endeksler su an servis edilebiliyor. */
+export function availableIndices() {
+  return ['ndx', ...[...others.keys()]].filter((k) => getIndex(k) != null);
+}
+
+/**
+ * Ikincil endeks goruntusu. Aboneleri de tetikler ki SSE dinleyicileri
+ * kendi endekslerini alsin.
+ * @param {string} key
+ * @param {any} snapshot
+ */
+export function setIndex(key, snapshot) {
+  if (key === 'ndx') return set(snapshot);
+  others.set(key, snapshot);
+  for (const fn of subscribers) {
+    try { fn(snapshot, key); } catch (err) {
+      log.warn('abone bildirimi basarisiz', { err: String(err?.message ?? err) });
+    }
+  }
 }
 
 export function ageSec() {
@@ -34,7 +72,7 @@ export function set(snapshot) {
   consecutiveFailures = 0;
   lastErrors = [];
   for (const fn of subscribers) {
-    try { fn(snapshot); } catch (err) {
+    try { fn(snapshot, 'ndx'); } catch (err) {
       log.warn('abone bildirimi basarisiz', { err: String(err?.message ?? err) });
     }
   }
@@ -51,7 +89,7 @@ export function recordFailure(errors) {
 }
 
 /**
- * @param {(snap: any) => void} fn
+ * @param {(snap: any, indexKey: string) => void} fn
  * @returns {() => void} aboneligi biten fonksiyon
  */
 export function subscribe(fn) {

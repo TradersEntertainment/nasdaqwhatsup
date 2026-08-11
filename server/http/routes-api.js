@@ -61,6 +61,7 @@ export async function handleApi(req, res, url) {
       mode: config.fixtureMode ? `fixture:${config.fixtureVariant}` : 'live',
       rateLimit: rateLimitInfo(),
       volume: disk,
+      indices: store.availableIndices(),
       // Pencere bolumunun ne kadar geriye gidebildigi — "4 saat neden kapali?"
       // sorusu tahminle degil bu alanla cevaplanir.
       tape: pricetape.info(),
@@ -74,12 +75,13 @@ export async function handleApi(req, res, url) {
   }
 
   if (p === '/api/snapshot') {
-    const snap = store.get();
+    const want = String(url.searchParams.get('index') ?? 'ndx').toLowerCase();
+    const snap = store.getIndex(want);
     if (!snap) {
-      json(res, 503, { error: 'veri henuz hazir degil' });
+      json(res, 503, { error: 'veri henuz hazir degil', index: want });
       return true;
     }
-    const etag = `"${snap.generatedAtMs}"`;
+    const etag = `"${want}:${snap.generatedAtMs}"`;
     if (req.headers['if-none-match'] === etag) {
       res.writeHead(304, { 'Cache-Control': 'no-store', ETag: etag });
       res.end();

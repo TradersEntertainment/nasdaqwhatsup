@@ -630,3 +630,49 @@ details.method code {
 }
 .win-jump:hover { border-color: var(--up); }
 .win-jump:focus-visible { outline: 2px solid var(--up); outline-offset: 2px; }
+
+/* ---------- Endeks secici ---------- */
+
+.idx-switch {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.idx-chip {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border-radius: var(--r-sm);
+  padding: 6px 11px;
+  font: inherit;
+  cursor: pointer;
+  min-height: 42px;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.idx-chip:hover { border-color: var(--ink-muted); }
+.idx-chip[aria-pressed="true"] {
+  background: var(--surface-3);
+  border-color: var(--ink-muted);
+}
+.idx-chip:focus-visible { outline: 2px solid var(--up); outline-offset: 2px; }
+.idx-code {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+.idx-chip[aria-pressed="true"] .idx-code { color: var(--ink); }
+.idx-val {
+  font-size: var(--fs-sm);
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.idx-val.up { color: var(--up); }
+.idx-val.down { color: var(--down); }
+.idx-val.flat { color: var(--ink-2); }

@@ -8,6 +8,7 @@ import { renderBreadth, renderConcentration, renderCounterfactual, renderLeaderb
 import { renderTable } from './sections/table.js';
 import { renderWindows, repaintWindowBars } from './sections/windows.js';
 import { renderEarnings } from './sections/earnings.js';
+import { renderIndexSwitch, paintBrand } from './sections/indexswitch.js';
 import { renderBars } from './charts/bars.js';
 import { renderTreemap } from './charts/treemap.js';
 import { renderDivergence } from './charts/lines.js';
@@ -24,6 +25,13 @@ const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
  */
 const nowRef = () => (snap?.quality?.clockPinned ? snap.generatedAtMs : Date.now());
 
+/** Secili endeks — URL'de tasinir ki paylasilan bag dogru endeksi acsin. */
+let indexKey = (new URLSearchParams(location.search).get('index') || 'ndx').toLowerCase();
+/** Cip satirindaki yuzdeler icin her endeksin son ozeti. */
+const indexSummary = { ndx: null, spx: null, dji: null };
+/** @type {(() => void)|null} */
+let disconnect = null;
+
 /** @type {any|null} */
 let snap = null;
 /** @type {any[]} */
@@ -38,6 +46,14 @@ function paintAll() {
   renderLastSession($('last-session'), snap);
   renderHero($('hero'), snap);
   renderBars($('carriers'), snap.constituents);
+  // S&P/Dow'da endeks SEVIYESI bilinmiyor, katki puan yerine yuzde puani
+  // olarak gosteriliyor — alt yazi da onu soylemeli.
+  const subC = $('sub-carriers');
+  if (subC) {
+    subC.textContent = snap.index.ndxBase > 0
+      ? 'her hissenin endeks hareketine kattığı puan'
+      : 'her hissenin endeks hareketine kattığı yüzde puanı';
+  }
   renderWindows($('windows'), snap);
   renderEarnings($('earnings'), snap);
   renderConcentration($('concentration'), snap);
@@ -47,6 +63,69 @@ function paintAll() {
   renderTable($('table'), snap);
   renderDivergence($('divergence'), intraday, snap.session);
   paintChrome();
+  paintIndexSwitch();
+}
+
+/**
+ * Endeks cipleri. Secili olmayan endekslerin yuzdesi arka planda tek bir
+ * anlik goruntu istegiyle tazelenir — SSE yalnizca secili endeksi itiyor.
+ */
+function paintIndexSwitch() {
+  renderIndexSwitch($('idx-switch'), {
+    active: indexKey,
+    summary: indexSummary,
+    onPick: switchIndex,
+  });
+}
+
+/** @param {string} key */
+function switchIndex(key) {
+  if (key === indexKey) return;
+  indexKey = key;
+  snap = null;
+  intraday = [];
+  lastDay = null;
+  // Bag paylasilabilir olsun: yenilenince ayni endeks acilir.
+  const u = new URL(location.href);
+  if (key === 'ndx') u.searchParams.delete('index');
+  else u.searchParams.set('index', key);
+  history.replaceState(null, '', u);
+
+  paintBrand(key);
+  paintIndexSwitch();
+  document.body.classList.add('refreshing');
+
+  disconnect?.();
+  disconnect = connect(onSnapshot, onConnState, indexKey);
+}
+
+/**
+ * Secili olmayan endekslerin ozetini seyrek tazele (cip yuzdeleri icin).
+ *
+ * Once /api/health'ten HANGI endekslerin servis edilebildigi sorulur. Dogrudan
+ * anlik goruntu istemek, o endeks yoksa 503 doner ve tarayici konsoluna
+ * bastirilamayan bir ag hatasi yazar — kullanici acisindan "site hata veriyor"
+ * gorunumu. Var olmayan seyi istememek daha dogru.
+ */
+async function refreshOtherSummaries() {
+  /** @type {string[]} */
+  let mevcut = [];
+  try {
+    const h = await fetch('/api/health', { cache: 'no-store' });
+    if (h.ok) mevcut = (await h.json()).indices ?? [];
+  } catch { return; }
+
+  for (const k of ['ndx', 'spx', 'dji']) {
+    if (k === indexKey) continue;
+    if (!mevcut.includes(k)) { indexSummary[k] = null; continue; }
+    try {
+      const r = await fetch(`/api/snapshot?index=${k}`, { cache: 'no-store' });
+      if (!r.ok) { indexSummary[k] = null; continue; }
+      const d = await r.json();
+      indexSummary[k] = { changePct: d.index.changePct };
+    } catch { /* cip "—" kalir */ }
+  }
+  paintIndexSwitch();
 }
 
 function paintChrome() {
@@ -137,6 +216,7 @@ function paintCountdown() {
 
 async function onSnapshot(next) {
   const first = snap == null;
+  indexSummary[indexKey] = { changePct: next.index.changePct };
   const dayChanged = snap && snap.tsiDay !== next.tsiDay;
   snap = next;
 
@@ -163,7 +243,7 @@ async function onSnapshot(next) {
   }
 }
 
-connect(onSnapshot, ({ connected, health }) => {
+function onConnState({ connected, health }) {
   // Iskelet parlamasi yok — onceki render yerinde solar.
   document.body.classList.toggle('refreshing', !connected);
 
@@ -179,7 +259,13 @@ connect(onSnapshot, ({ connected, health }) => {
       </p>
       <p class="empty" style="text-align:left;padding-top:10px">${errs}</p>`;
   }
-});
+}
+
+paintBrand(indexKey);
+disconnect = connect(onSnapshot, onConnState, indexKey);
+// Cip yuzdeleri: acilista bir kez, sonra 2 dakikada bir.
+refreshOtherSummaries();
+setInterval(refreshOtherSummaries, 120_000);
 
 // Saat ve geri sayim, veri gelmese de akmali.
 setInterval(() => {

@@ -12,7 +12,9 @@ const HEARTBEAT_MS = 25_000;
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  */
-export function handleStream(req, res) {
+export function handleStream(req, res, url) {
+  // Hangi endeks izleniyor? Istemci endeks degistirince yeni bir akis acar.
+  const want = String(url?.searchParams?.get('index') ?? 'ndx').toLowerCase();
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -27,10 +29,11 @@ export function handleStream(req, res) {
   };
 
   // Baglanir baglanmaz mevcut durumu gonder ki istemci bos beklemesin.
-  const initial = store.get();
+  const initial = store.getIndex(want);
   if (initial) send('snapshot', { ...initial, ageSec: store.ageSec() });
 
-  const unsubscribe = store.subscribe((snap) => {
+  const unsubscribe = store.subscribe((snap, key) => {
+    if (key !== want) return;
     send('snapshot', { ...snap, ageSec: store.ageSec() });
   });
 

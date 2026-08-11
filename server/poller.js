@@ -14,10 +14,12 @@ import * as store from './store.js';
 import * as history from './history.js';
 import * as storage from './storage.js';
 import { buildSnapshot } from './pipeline/build-snapshot.js';
-import { fetchFixture, fixtureTape, fixtureEarnings } from './sources/fixture.js';
+import { fetchFixture, fixtureTape, fixtureEarnings, fixtureIndexRows } from './sources/fixture.js';
 import * as tape from './pricetape.js';
 import { getEarnings } from './sources/earnings.js';
 import { sessionEndUtc, sessionState } from '../shared/session.js';
+import { fetchIndexRows } from './pipeline/index-rows.js';
+import { INDEX_KEYS, DEFAULT_INDEX, indexDef } from '../shared/indices.js';
 
 let inFlight = false;
 let tick = 0;
@@ -95,12 +97,22 @@ export async function runOnce(reason = 'manual', { fast = false } = {}) {
     }
 
     store.set(snapshot);
-    // Bant anlik goruntu YAYINLANDIKTAN sonra beslenir: degismez kontrolunden
-    // gecmemis bir fiyat seti pencere gecmisini kirletmesin.
-    await tape.push(raw.rows, snapshot.generatedAtMs, snapshot.tsiDay, raw.observedAt);
     // Hizli gecis gercek bazlari cekmedi; bayragi DUSURME, rafine tur yapsin.
     if (!fast) needBaselineRefresh = false;
     if (!snapshot.coverage?.partial) await history.recordIntraday(snapshot);
+
+    // Ikincil endeksler (S&P 500, Dow 30). Her biri BAGIMSIZ: biri duserse
+    // digerleri ve ana endeks etkilenmez. Hatalari `recordFailure`'a da
+    // yazilmaz — o sayac Railway healthcheck'ini besliyor ve yan endeksin
+    // sorunu ana replica'yi oldurmemeli.
+    const yanRows = await runSecondary(raw, snapshot);
+
+    // Fiyat bandi TUM endekslerin sembollerini kapsar; sembol bazli oldugu
+    // icin tek bant ucune de hizmet eder (AAPL her ucunde ayni).
+    await tape.push(
+      dedupeBySymbol([raw.rows, ...yanRows]),
+      snapshot.generatedAtMs, snapshot.tsiDay, raw.observedAt,
+    );
 
     log.info('poll tamam', {
       reason,
@@ -118,6 +130,73 @@ export async function runOnce(reason = 'manual', { fast = false } = {}) {
     inFlight = false;
     scheduleRollover();
   }
+}
+
+/**
+ * Ikincil endeksleri kurar ve store'a yazar. HICBIR hata yukari tasinmaz:
+ * S&P/Dow bir turda gelmezse site ana endeksle calismaya devam eder.
+ *
+ * @param {any} raw ana endeksin ham verisi (bant ve saat referansi icin)
+ * @param {any} primary ana anlik goruntu (bilanco/bant paylasimi icin)
+ * @returns {Promise<any[][]>} her endeksin satirlari (bant birlesimi icin)
+ */
+async function runSecondary(raw, primary) {
+  const out = [];
+  for (const key of INDEX_KEYS) {
+    if (key === DEFAULT_INDEX) continue;
+    try {
+      const r = config.fixtureMode
+        ? {
+          ...raw,
+          rows: fixtureIndexRows(raw.rows, /** @type {any} */ (key)),
+          // Seviye yalnizca NDX icin biliniyor; yan endekslerde puan kapali.
+          ndxBase: 0,
+          officialRegularPct: null,
+          minConstituents: key === 'dji' ? 25 : 50,
+          quality: { ...raw.quality, weightsSource: 'fixture' },
+        }
+        : await fetchIndexRows(key, raw.nowUtc);
+      if (!r) continue;
+
+      const { snapshot, errors } = buildSnapshot({
+        ...r,
+        quality: { ...r.quality, clockPinned: false },
+        tape: config.fixtureMode
+          ? fixtureTape(r.rows, raw.nowUtc)
+          : tape.getFrames(),
+        tapePersisted: storage.isAvailable(),
+        // Bilanco takvimi ana endeksle ayni cagridan geliyor; sembol bazli
+        // oldugu icin yan endekslerde de dogru calisir.
+        earnings: primary.constituents.reduce((acc, c) => {
+          if (c.earn) acc[c.s] = c.earn;
+          return acc;
+        }, /** @type {Record<string, any>} */ ({})),
+      });
+
+      if (errors.length) {
+        log.warn('ikincil endeks degismez kontrolunden gecemedi', { endeks: key, errors });
+        continue;
+      }
+      snapshot.indexKey = key;
+      snapshot.indexLabel = indexDef(key).label;
+      snapshot.indexNote = indexDef(key).note;
+      store.setIndex(key, snapshot);
+      out.push(r.rows);
+    } catch (err) {
+      log.warn('ikincil endeks atlandi', { endeks: key, err: String(err?.message ?? err).slice(0, 120) });
+    }
+  }
+  return out;
+}
+
+/** Bant icin sembol bazli birlesim — ayni sembol birden fazla endekste olabilir. */
+function dedupeBySymbol(lists) {
+  /** @type {Map<string, any>} */
+  const m = new Map();
+  for (const list of lists) {
+    for (const r of list ?? []) if (r?.symbol && !m.has(r.symbol)) m.set(r.symbol, r);
+  }
+  return [...m.values()];
 }
 
 /**

@@ -17,10 +17,11 @@
     <div class="brand">
       <div class="brand-mark" aria-hidden="true">N</div>
       <div>
-        <h1>Nasdaq'ı Kim Taşıyor?</h1>
-        <p>NASDAQ-100 · katkı, genişlik ve ıraksama</p>
+        <h1 id="brand-title">Nasdaq'ı Kim Taşıyor?</h1>
+        <p id="brand-sub">NASDAQ-100 · katkı, genişlik ve ıraksama</p>
       </div>
     </div>
+    <div class="idx-switch" id="idx-switch" role="group" aria-label="Endeks seçimi"></div>
     <span class="chip" id="chip-session"><span class="dot"></span><span>—</span></span>
     <span class="chip" id="chip-reset">—</span>
     <span class="chip" id="chip-age">—</span>
@@ -38,7 +39,7 @@
     <section class="card s8" aria-labelledby="h-carriers">
       <div class="card-head">
         <h2 id="h-carriers">Endeksi kim taşıyor</h2>
-        <span class="sub">her hissenin endeks hareketine kattığı puan</span>
+        <span class="sub" id="sub-carriers">her hissenin endeks hareketine kattığı puan</span>
       </div>
       <div id="carriers"></div>
     </section>

@@ -49,6 +49,11 @@ export function renderBars(host, constituents, opts = {}) {
   const barH = 13;
   const H = rows.length * rowH + 26;
 
+  // S&P/Dow'un puan cinsinden SEVIYESI anahtarsiz elde edilemiyor; o
+  // endekslerde `contribPts` her satirda 0 gelir. Etiketleri "0,00" diye
+  // basmak yerine yuzde puanina dusulur — uydurma seviye yok.
+  const hasPts = rows.some((c) => Number.isFinite(c.contribPts) && c.contribPts !== 0);
+
   const maxPos = Math.max(0, ...rows.map((c) => c.contribPp));
   const maxNeg = Math.max(0, ...rows.map((c) => -c.contribPp));
   const span = maxPos + maxNeg || 1;
@@ -123,7 +128,7 @@ export function renderBars(host, constituents, opts = {}) {
       fill: 'var(--ink-2)',
       'font-variant-numeric': 'tabular-nums',
     });
-    val.textContent = pts(c.contribPts);
+    val.textContent = hasPts ? pts(c.contribPts) : pp(c.contribPp);
     g.appendChild(val);
 
     bindTip(g, () => `

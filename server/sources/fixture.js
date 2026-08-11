@@ -179,3 +179,24 @@ export function fixtureEarnings(rows, todayEt) {
   });
   return out;
 }
+
+/**
+ * Fixture'dan IKINCIL endeks satirlari.
+ *
+ * Amac gercekci veri degil, ARAYUZU AGSIZ GORMEK: endeks secici, fiyat
+ * agirlikli Dow ve kap agirlikli S&P ekranlari ekran goruntusu alinabilsin.
+ * Uretimde bu yol hic calismaz (yalnizca FIXTURE_MODE).
+ *
+ * @param {any[]} rows ana fixture satirlari
+ * @param {'spx'|'dji'} key
+ */
+export function fixtureIndexRows(rows, key) {
+  if (key === 'dji') {
+    // Fiyat agirlikli: pay adedi 1. En pahali 30 hisse secilir ki "pahali
+    // hisse tasir" davranisi ekranda gorunsun.
+    const secili = [...rows].sort((a, b) => b.price - a.price).slice(0, 30);
+    return secili.map((r) => ({ ...r, shares: 1, sector: null }));
+  }
+  // S&P vekili: ayni evren, agirliklar oldugu gibi (kap agirlikli).
+  return rows.map((r) => ({ ...r, sector: null }));
+}

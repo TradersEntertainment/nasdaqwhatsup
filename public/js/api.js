@@ -9,7 +9,8 @@ const RECONNECT_MS = 5_000;
  * @param {(snap: any) => void} onSnapshot
  * @param {(state: {connected: boolean, mode: 'sse'|'poll'}) => void} [onState]
  */
-export function connect(onSnapshot, onState = () => {}) {
+export function connect(onSnapshot, onState = () => {}, index = 'ndx') {
+  const q = `?index=${encodeURIComponent(index)}`;
   /** @type {EventSource|null} */
   let es = null;
   /** @type {number|undefined} */
@@ -18,7 +19,7 @@ export function connect(onSnapshot, onState = () => {}) {
 
   async function pollOnce() {
     try {
-      const r = await fetch('/api/snapshot', { cache: 'no-store' });
+      const r = await fetch(`/api/snapshot${q}`, { cache: 'no-store' });
       if (r.ok) {
         onSnapshot(await r.json());
         onState({ connected: true, mode: 'poll' });
@@ -48,7 +49,7 @@ export function connect(onSnapshot, onState = () => {}) {
 
   function openStream() {
     if (closed) return;
-    es = new EventSource('/api/stream');
+    es = new EventSource(`/api/stream${q}`);
 
     es.addEventListener('snapshot', (ev) => {
       stopPolling();

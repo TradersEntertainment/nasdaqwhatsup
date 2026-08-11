@@ -95,7 +95,7 @@ export function renderWindows(host, snap) {
     <div class="win-readout">
       <div>
         <div class="win-num ${tone(cur.changePct)}">${arrow(cur.changePct)} ${pct(cur.changePct)}</div>
-        <div class="win-sub">endeks · ${pts(cur.changePts)} puan</div>
+        <div class="win-sub">endeks${cur.changePts ? ` · ${pts(cur.changePts)} puan` : ''}</div>
       </div>
       <div class="win-breadth">
         <div><b class="up">${int(cur.up)}</b> yükselen · <b class="down">${int(cur.down)}</b> düşen

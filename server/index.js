@@ -29,7 +29,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === '/api/stream') {
-      handleStream(req, res);
+      handleStream(req, res, url);
       return;
     }
 
