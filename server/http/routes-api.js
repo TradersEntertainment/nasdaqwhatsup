@@ -165,6 +165,22 @@ export async function handleApi(req, res, url) {
         }
         : { ok: false, ...(r ?? {}), beklenen: m.EXPECTED[key] };
     }
+    // Kap-agirlikli endekste pay adedi yoksa agirlik piyasa degerinden
+    // turetilecek — o kolonun gercekten geldigini de burada olcelim.
+    try {
+      const { fetchMarketCaps } = await import('../sources/tradingview.js');
+      const syms = sonuc.spx?.ornek?.length
+        ? ['AAPL', 'MSFT', 'NVDA', 'BRK.B', 'JPM']
+        : ['AAPL', 'MSFT'];
+      const mc = await fetchMarketCaps(syms);
+      sonuc.piyasaDegeriKolonu = {
+        ok: mc.size > 0, adet: mc.size,
+        ornek: [...mc].slice(0, 5).map(([k, v]) => `${k}=${Math.round(v / 1e9)}Mr$`),
+      };
+    } catch (err) {
+      sonuc.piyasaDegeriKolonu = { ok: false, hata: String(err?.message ?? err).slice(0, 140) };
+    }
+
     json(res, 200, {
       not: 'ok:true ve uye beklenen aralikta ise o endeks acilabilir. ' +
         'payAdediVar > 0 ise agirlik GERCEK pay adedinden hesaplanir; ' +

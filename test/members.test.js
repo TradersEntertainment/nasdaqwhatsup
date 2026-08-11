@@ -4,6 +4,7 @@ import {
   parseWikiConstituents, parseIsharesHoldings, splitCsvLine, EXPECTED,
 } from '../server/sources/members.js';
 
+
 /* ---------------- Wikipedia ---------------- */
 
 // S&P sayfasi: Symbol ILK sutun.
@@ -35,6 +36,41 @@ test('wiki: S&P tablosundan semboller (Symbol ilk sutun)', () => {
 
 test('wiki: Dow tablosunda Symbol UCUNCU sutun — baslikla bulunur', () => {
   assert.deepEqual(parseWikiConstituents(DJI_HTML), ['MMM', 'AMGN', 'AAPL']);
+});
+
+// Uretimde Dow BASARISIZ oldu: sayfada id="constituents" yok ve bilesen
+// tablosu ILK tablo degil. Onceki surum ilk tabloyu okuyup cop uretiyordu.
+const DJI_GERCEKCI = `
+<table class="infobox"><tr><th>Kisaltma</th><td>DJIA</td></tr>
+<tr><th>Borsa</th><td>NYSE</td></tr></table>
+<h2>Components</h2>
+<table class="wikitable sortable">
+<tr><th>Company</th><th>Exchange</th><th>Symbol</th><th>Industry</th></tr>
+${['MMM','AXP','AMGN','AAPL','BA','CAT','CVX','CSCO','KO','DIS',
+   'GS','HD','HON','IBM','JNJ','JPM','MCD','MRK','MSFT','NKE',
+   'NVDA','PG','CRM','SHW','TRV','UNH','VZ','V','WMT','DOW']
+  .map((t) => `<tr><td>Sirket ${t}</td><td>NYSE</td><td><a href="/x">${t}</a></td><td>Sanayi</td></tr>`)
+  .join('')}
+</table>
+<table class="wikitable"><tr><th>Yil</th><th>Kapanis</th></tr>
+<tr><td>2020</td><td>30606</td></tr></table>`;
+
+test('wiki: id yoksa ve bilesen tablosu ilk tablo degilse ARALIKLA bulunur', () => {
+  const syms = parseWikiConstituents(DJI_GERCEKCI, EXPECTED.dji);
+  assert.equal(syms.length, 30, 'infobox ve tarihce tablosu degil, bilesen tablosu');
+  assert.equal(syms[0], 'MMM');
+  assert.ok(syms.includes('NVDA'));
+});
+
+test('wiki: borsa adlari sembol sanilmaz', () => {
+  const syms = parseWikiConstituents(DJI_GERCEKCI, EXPECTED.dji);
+  assert.ok(!syms.includes('NYSE'), 'NYSE sembol bicimine uyuyor ama sembol degil');
+  assert.ok(!syms.includes('NASDAQ'));
+});
+
+test('wiki: hicbir tablo araliga oturmuyorsa BOS doner (cop liste yok)', () => {
+  // Guard'in uretimde yaptigi tam olarak buydu: yanlis tabloyu reddetti.
+  assert.deepEqual(parseWikiConstituents(DJI_GERCEKCI, [400, 520]), []);
 });
 
 test('wiki: yalnizca constituents tablosu okunur, sonraki tablolar degil', () => {

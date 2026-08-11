@@ -112,6 +112,7 @@ export function parseScan(json, columns) {
       postClose: at(d, 'postmarket_close'),
       postChange: at(d, 'postmarket_change'),
       postVolume: at(d, 'postmarket_volume'),
+      marketCap: at(d, 'market_cap_basic'),
     };
 
     // Ayni kisaltma birden fazla borsada donerse en hacimlisi kazanir.
@@ -217,4 +218,64 @@ export async function fetchTradingView(symbols) {
     }
   }
   throw new Error(`tradingview: ${errs.join(' | ')}`);
+}
+
+/* ------------------------------------------------------------------ */
+/* Piyasa degerleri — kap-agirlikli endeksler icin                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * S&P 500 gibi kap-agirlikli bir endekste GERCEK pay adedi elde yoksa
+ * agirlik piyasa degerinden turetilir: payAdedi = piyasaDegeri / fiyat.
+ *
+ * Neden AYRI ve YAVAS bir istek: piyasa degeri gun icinde fiyatla birlikte
+ * oynar ama AGIRLIK icin onemli olan pay adedi — o yalnizca yeniden
+ * dengelemede degisir. 12 saatte bir yeter. Ayrica `market_cap_basic`
+ * kolonunun reddedilmesi ihtimaline karsi fiyat istegiyle AYNI cagriya
+ * konmuyor: gecersiz tek bir kolon adi tum fiyat yolunu 400'e dusururdu.
+ *
+ * ⚠ Sinir: bu deger genelde TOPLAM piyasa degeri, serbest dolasim
+ * duzeltmeli degil. S&P resmi agirliklari serbest dolasima gore hesaplaniyor,
+ * bu yuzden dusuk halka aciklik oranli sirketlerde sapma olur. Arayuz bunu
+ * soyler; trackingErrorPp de sapmayi olcer.
+ *
+ * @param {string[]} symbols
+ * @returns {Promise<Map<string, number>>} sembol -> piyasa degeri
+ */
+export async function fetchMarketCaps(symbols) {
+  const columns = ['name', 'market_cap_basic', 'close'];
+  const errs = [];
+  for (const url of SCAN_URLS) {
+    try {
+      const res = await fetchWithTimeout(url, {
+        method: 'POST',
+        timeoutMs: 25_000,
+        headers: HEADERS,
+        body: JSON.stringify({
+          filter: [{ left: 'name', operation: 'in_range', right: symbols.slice(0, 600) }],
+          options: { lang: 'en' },
+          markets: ['america'],
+          symbols: { query: { types: [] }, tickers: [] },
+          columns,
+          range: [0, 700],
+        }),
+      });
+      assertOk(res, 'tradingview market cap');
+      const map = parseScan(await res.json(), columns);
+      /** @type {Map<string, number>} */
+      const out = new Map();
+      for (const [sym, rec] of map) {
+        // parseScan bilinmeyen kolonlari null birakir; burada ham degere
+        // erisim icin `close` uzerinden dogrulama yapiliyor.
+        const mc = rec.marketCap ?? null;
+        if (mc > 0) out.set(sym, mc);
+      }
+      if (out.size === 0) throw new Error('piyasa degeri kolonu bos dondu');
+      log.info('tradingview piyasa degerleri', { adet: out.size, istenen: symbols.length });
+      return out;
+    } catch (err) {
+      errs.push(String(err?.message ?? err).slice(0, 70));
+    }
+  }
+  throw new Error(`tradingview piyasa degeri: ${errs.join(' | ')}`);
 }

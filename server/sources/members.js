@@ -48,34 +48,37 @@ const TICKER = /^[A-Z][A-Z.\-]{0,5}$/;
 const stripTags = (s) => String(s).replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&')
   .replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 
+/** Makul uye sayisi araliklari — kaba bir kaynak bozulmasi bunlara takilir. */
+export const EXPECTED = {
+  spx: [400, 520],
+  dji: [25, 35],
+  ndx: [85, 110],
+};
+
 /* ------------------------------------------------------------------ */
 /* Wikipedia                                                           */
 /* ------------------------------------------------------------------ */
 
 /**
- * "constituents" tablosundan sembol sutununu cikarir.
+ * Borsa adlari sembol bicimine uyuyor ("NYSE", "NASDAQ"). Dow sayfasinda bunlar
+ * ayri bir sutunda ve basliksiz ayristirmada sembol sanilabiliyorlardi.
+ */
+const NOT_TICKER = new Set(['NYSE', 'NASDAQ', 'AMEX', 'CBOE', 'BATS', 'ARCA', 'OTC', 'N/A']);
+
+/**
+ * TEK bir HTML tablosundan sembol sutununu cikarir.
  *
  * Sutun SIRASI sayfadan sayfaya degisiyor: S&P sayfasinda Symbol ILK sutun,
  * Dow sayfasinda UCUNCU. Bu yuzden sabit indeks kullanilmaz — baslik satirinda
  * "Symbol"/"Ticker" yazan sutunun indeksi bulunur.
  *
- * @param {string} html
+ * @param {string} table tek bir <table> govdesi
  * @returns {string[]}
  */
-export function parseWikiConstituents(html) {
-  if (typeof html !== 'string') return [];
-
-  // id="constituents" tasiyan tabloyu bul; yoksa ilk wikitable'a dus.
-  let start = html.search(/<table[^>]*id\s*=\s*["']constituents["']/i);
-  if (start < 0) start = html.search(/<table[^>]*class\s*=\s*["'][^"']*wikitable/i);
-  if (start < 0) return [];
-  const end = html.indexOf('</table>', start);
-  const table = html.slice(start, end < 0 ? html.length : end);
-
+function symbolsFromTable(table) {
   const rows = table.split(/<tr[^>]*>/i).slice(1);
   if (rows.length === 0) return [];
 
-  // Baslik satiri: "Symbol" / "Ticker" hangi sutunda?
   let symCol = -1;
   for (const row of rows) {
     const heads = [...row.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map((m) => stripTags(m[1]));
@@ -90,17 +93,62 @@ export function parseWikiConstituents(html) {
     const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((m) => stripTags(m[1]));
     if (cells.length === 0) continue;
 
-    // Baslik bulunamadiysa: satirdaki ILK sembol-bicimli hucre.
+    // Baslik bulunamadiysa: satirdaki ilk sembol-bicimli hucre — ama borsa
+    // adlari ("NYSE"/"NASDAQ") de sembol bicimine uydugu icin elenir.
     const raw = symCol >= 0 && symCol < cells.length
       ? cells[symCol]
-      : cells.find((c) => TICKER.test(c.toUpperCase())) ?? '';
+      : cells.find((c) => {
+        const u = c.toUpperCase().replace(/\s+/g, '');
+        return TICKER.test(u) && !NOT_TICKER.has(u);
+      }) ?? '';
 
     const sym = raw.toUpperCase().replace(/\s+/g, '');
-    if (!TICKER.test(sym) || seen.has(sym)) continue;
+    if (!TICKER.test(sym) || NOT_TICKER.has(sym) || seen.has(sym)) continue;
     seen.add(sym);
     out.push(sym);
   }
   return out;
+}
+
+/**
+ * Sayfadaki uye tablosunu BULUR.
+ *
+ * Onceki surum `id="constituents"`e guveniyor, bulamazsa SAYFADAKI ILK
+ * wikitable'a dusuyordu. Dow sayfasinda o tablo bileşen tablosu degil — ve
+ * uretimde tam olarak bu oldu: liste sacmaladi, aralik kontrolune takildi,
+ * Dow hic acilmadi.
+ *
+ * Artik tahmin yok: TUM tablolar denenir ve beklenen uye araligina OTURAN ilk
+ * sonuc kabul edilir. Dogru tabloyu veri secer, isimlendirme degil.
+ *
+ * @param {string} html
+ * @param {[number, number]} [range] beklenen [en az, en cok] uye
+ * @returns {string[]}
+ */
+export function parseWikiConstituents(html, range) {
+  if (typeof html !== 'string') return [];
+
+  const tables = [];
+  const re = /<table[\s\S]*?<\/table>/gi;
+  for (const m of html.matchAll(re)) tables.push(m[0]);
+  if (tables.length === 0) return [];
+
+  // Once id="constituents" varsa o one alinir — dogruysa aralik testini
+  // zaten gecer, degilse digerleri denenmeye devam eder.
+  tables.sort((a, b) => Number(/id\s*=\s*["']constituents["']/i.test(b)) -
+                        Number(/id\s*=\s*["']constituents["']/i.test(a)));
+
+  const adaylar = tables.map(symbolsFromTable).filter((x) => x.length > 0);
+  if (adaylar.length === 0) return [];
+
+  if (range) {
+    const [lo, hi] = range;
+    const uygun = adaylar.find((x) => x.length >= lo && x.length <= hi);
+    if (uygun) return uygun;
+    return [];
+  }
+  // Aralik verilmediyse en uzun aday (bileşen tablosu genelde en buyuk olan).
+  return adaylar.reduce((a, b) => (b.length > a.length ? b : a));
 }
 
 /**
@@ -110,6 +158,7 @@ export function parseWikiConstituents(html) {
 export async function fetchWikiMembers(key) {
   const page = WIKI_PAGES[key];
   if (!page) return [];
+  const range = EXPECTED[key];
   // `action=render` yalnizca govdeyi dondurur — tam sayfa HTML'inden cok
   // daha kucuk ve ayristirmasi daha kararli.
   const url = `https://en.wikipedia.org/w/index.php?title=${page}&action=render`;
@@ -121,7 +170,7 @@ export async function fetchWikiMembers(key) {
     assertOk(res, url);
     return res.text();
   }, { tries: 2, label: `wiki:${key}` });
-  return parseWikiConstituents(html);
+  return parseWikiConstituents(html, range);
 }
 
 /* ------------------------------------------------------------------ */
@@ -210,13 +259,6 @@ export async function fetchIsharesSpx() {
 /* ------------------------------------------------------------------ */
 /* Merdiven                                                            */
 /* ------------------------------------------------------------------ */
-
-/** Makul uye sayisi araliklari — kaba bir kaynak bozulmasi bunlara takilir. */
-export const EXPECTED = {
-  spx: [400, 520],
-  dji: [25, 35],
-  ndx: [85, 110],
-};
 
 /**
  * Bir endeksin uyelerini getirir. Her kaynak denenir, ILK GECERLI sonuc
