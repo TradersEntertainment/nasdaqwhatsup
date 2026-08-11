@@ -145,6 +145,35 @@ export async function handleApi(req, res, url) {
     return true;
   }
 
+  if (p === '/api/members-probe') {
+    // Teshis: S&P 500 ve Dow 30 uye listeleri hangi kaynaktan gelebiliyor?
+    // nasdaq.com olcuidu ve yalnizca nasdaq100 veriyor; bu uc geri kalan iki
+    // kaynagi (iShares IVV CSV, Wikipedia) sunucunun kendi ag konumundan
+    // dener ve KAC UYE dondugunu raporlar.
+    const m = await import('../sources/members.js');
+    const sonuc = {};
+    for (const key of ['spx', 'dji']) {
+      const r = await m.fetchMembers(/** @type {any} */ (key)).catch((err) => ({
+        hata: String(err?.message ?? err).slice(0, 140),
+      }));
+      sonuc[key] = r?.members
+        ? {
+          ok: true, kaynak: r.source, uye: r.members.length,
+          payAdediVar: r.members.filter((x) => x.shares > 0).length,
+          ornek: r.members.slice(0, 8).map((x) => x.symbol),
+          beklenen: m.EXPECTED[key],
+        }
+        : { ok: false, ...(r ?? {}), beklenen: m.EXPECTED[key] };
+    }
+    json(res, 200, {
+      not: 'ok:true ve uye beklenen aralikta ise o endeks acilabilir. ' +
+        'payAdediVar > 0 ise agirlik GERCEK pay adedinden hesaplanir; ' +
+        '0 ise piyasa degerinden turetilir (Dow icin gerekmez).',
+      sonuc,
+    });
+    return true;
+  }
+
   if (p === '/api/index-probe') {
     // Teshis: S&P 500 ve Dow 30 UYE LISTELERI nasdaq.com'un ayni ucundan
     // geliyor mu? Slug adlari belgeli degil, o yuzden birkac aday denenir.
