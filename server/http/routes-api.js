@@ -165,6 +165,33 @@ export async function handleApi(req, res, url) {
         }
         : { ok: false, ...(r ?? {}), beklenen: m.EXPECTED[key] };
     }
+    // Dow iki turdur acilmadi. Bir tur daha kaybetmemek icin: basarisizsa
+    // sayfadaki HER tablonun HER okuma stratejisinin ne urettigini raporla.
+    // Boylece sebep tahmin edilmez, gorulur.
+    if (!sonuc.dji?.ok) {
+      try {
+        const html = await (await fetchWithTimeout(
+          'https://en.wikipedia.org/w/index.php?title=Dow_Jones_Industrial_Average&action=render',
+          { timeoutMs: 20_000, headers: { 'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+            '(KHTML, like Gecko) Chrome/124.0 Safari/537.36' } }
+        )).text();
+        const tablolar = [...html.matchAll(/<table[\s\S]*?<\/table>/gi)].map((x) => x[0]);
+        sonuc.dowTeshis = {
+          govdeBayt: html.length,
+          tabloSayisi: tablolar.length,
+          tablolar: tablolar.slice(0, 12).map((t, i) => ({
+            i,
+            basliklar: [...t.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)]
+              .slice(0, 8).map((m) => m[1].replace(/<[^>]*>/g, ' ').trim()).filter(Boolean),
+            satir: (t.match(/<tr/gi) ?? []).length,
+          })),
+        };
+      } catch (err) {
+        sonuc.dowTeshis = { hata: String(err?.message ?? err).slice(0, 160) };
+      }
+    }
+
     // Kap-agirlikli endekste pay adedi yoksa agirlik piyasa degerinden
     // turetilecek — o kolonun gercekten geldigini de burada olcelim.
     try {

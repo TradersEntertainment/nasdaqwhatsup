@@ -68,6 +68,29 @@ test('wiki: borsa adlari sembol sanilmaz', () => {
   assert.ok(!syms.includes('NASDAQ'));
 });
 
+// Wikipedia satir basligi sutunlarini <th scope="row"> yapiyor. Uretimde Dow
+// bu yuzden ikinci turda da acilmadi: baslik indeksi TUM sutunlar uzerinden
+// bulunuyor ama veri hucreleri yalnizca <td> sayiliyordu, indeks bir kayiyor
+// ve "Symbol" yerine "Industry" okunuyordu.
+const DJI_TH_SATIR_BASLIGI = `
+<table class="wikitable sortable">
+<tr><th>Company</th><th>Exchange</th><th>Symbol</th><th>Industry</th><th>Date added</th></tr>
+${['MMM','AXP','AMGN','AAPL','BA','CAT','CVX','CSCO','KO','DIS',
+   'GS','HD','HON','IBM','JNJ','JPM','MCD','MRK','MSFT','NKE',
+   'NVDA','PG','CRM','SHW','TRV','UNH','VZ','V','WMT','DOW']
+  .map((t) => `<tr><th scope="row">Sirket ${t}</th><td>NYSE</td><td>${t}</td>` +
+              `<td>Sanayi</td><td>1999-01-01</td></tr>`)
+  .join('')}
+</table>`;
+
+test('wiki: satir basligi <th> olan tabloda sutun kaymasi olmaz', () => {
+  const syms = parseWikiConstituents(DJI_TH_SATIR_BASLIGI, EXPECTED.dji);
+  assert.equal(syms.length, 30);
+  assert.equal(syms[0], 'MMM');
+  assert.ok(syms.includes('NVDA'), 'Industry sutunu degil Symbol sutunu okunmali');
+  assert.ok(!syms.includes('SANAYI'));
+});
+
 test('wiki: hicbir tablo araliga oturmuyorsa BOS doner (cop liste yok)', () => {
   // Guard'in uretimde yaptigi tam olarak buydu: yanlis tabloyu reddetti.
   assert.deepEqual(parseWikiConstituents(DJI_GERCEKCI, [400, 520]), []);

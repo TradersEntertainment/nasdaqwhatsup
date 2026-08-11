@@ -63,7 +63,14 @@ export const EXPECTED = {
  * Borsa adlari sembol bicimine uyuyor ("NYSE", "NASDAQ"). Dow sayfasinda bunlar
  * ayri bir sutunda ve basliksiz ayristirmada sembol sanilabiliyorlardi.
  */
-const NOT_TICKER = new Set(['NYSE', 'NASDAQ', 'AMEX', 'CBOE', 'BATS', 'ARCA', 'OTC', 'N/A']);
+const NOT_TICKER = new Set([
+  // Borsa adlari
+  'NYSE', 'NASDAQ', 'AMEX', 'CBOE', 'BATS', 'ARCA', 'OTC', 'N/A',
+  // Tablo BASLIKLARI: "SYMBOL" alti harf ve sembol bicimine uyuyor. Hucre
+  // toplamaya <th>'ler dahil edilince baslik satiri kendini uye sanmisti.
+  'SYMBOL', 'TICKER', 'COMPANY', 'SECTOR', 'NOTES', 'DATE', 'ADDED', 'NAME',
+  'INDEX', 'WEIGHT', 'PRICE', 'SHARES', 'CUSIP', 'ISIN', 'GICS', 'GICSSUB',
+]);
 
 /**
  * TEK bir HTML tablosundan sembol sutununu cikarir.
@@ -75,10 +82,43 @@ const NOT_TICKER = new Set(['NYSE', 'NASDAQ', 'AMEX', 'CBOE', 'BATS', 'ARCA', 'O
  * @param {string} table tek bir <table> govdesi
  * @returns {string[]}
  */
-function symbolsFromTable(table) {
+function tableCandidates(table) {
   const rows = table.split(/<tr[^>]*>/i).slice(1);
   if (rows.length === 0) return [];
 
+  // Hucreler TH VE TD birlikte, BELGE SIRASINDA toplanir.
+  //
+  // Kritik: Wikipedia satir basligi sutunlarini <th scope="row"> yapiyor.
+  // Yalnizca <td> toplayip basligi tum sutunlar uzerinden saymak, boyle bir
+  // tabloda indeksi bir kaydirir — Dow sayfasinda "Symbol" yerine "Industry"
+  // okunuyordu ve uretimde Dow tam bu yuzden hic acilmadi.
+  const cellsOf = (row, both) => [
+    ...row.matchAll(both ? /<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi : /<td[^>]*>([\s\S]*?)<\/td>/gi),
+  ].map((m) => stripTags(m[1]));
+
+  const clean = (c) => String(c).toUpperCase().replace(/\s+/g, '');
+  const usable = (u) => TICKER.test(u) && !NOT_TICKER.has(u);
+
+  /**
+   * @param {(row: string) => string} pick
+   *
+   * Yalnizca VERI satirlari gezilir: icinde hic <td> olmayan satir baslik
+   * satiridir ve degeri hucre olarak okunmamalidir.
+   */
+  const collect = (pick) => {
+    const out = [];
+    const seen = new Set();
+    for (const row of rows) {
+      if (!/<td[\s>]/i.test(row)) continue;
+      const sym = clean(pick(row));
+      if (!usable(sym) || seen.has(sym)) continue;
+      seen.add(sym);
+      out.push(sym);
+    }
+    return out;
+  };
+
+  // Baslik satirinda "Symbol"/"Ticker" hangi sirada?
   let symCol = -1;
   for (const row of rows) {
     const heads = [...row.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map((m) => stripTags(m[1]));
@@ -87,27 +127,18 @@ function symbolsFromTable(table) {
     if (i >= 0) { symCol = i; break; }
   }
 
-  const out = [];
-  const seen = new Set();
-  for (const row of rows) {
-    const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((m) => stripTags(m[1]));
-    if (cells.length === 0) continue;
-
-    // Baslik bulunamadiysa: satirdaki ilk sembol-bicimli hucre — ama borsa
-    // adlari ("NYSE"/"NASDAQ") de sembol bicimine uydugu icin elenir.
-    const raw = symCol >= 0 && symCol < cells.length
-      ? cells[symCol]
-      : cells.find((c) => {
-        const u = c.toUpperCase().replace(/\s+/g, '');
-        return TICKER.test(u) && !NOT_TICKER.has(u);
-      }) ?? '';
-
-    const sym = raw.toUpperCase().replace(/\s+/g, '');
-    if (!TICKER.test(sym) || NOT_TICKER.has(sym) || seen.has(sym)) continue;
-    seen.add(sym);
-    out.push(sym);
+  const adaylar = [];
+  if (symCol >= 0) {
+    // a) th+td birlikte sayilarak (satir basligi <th> olan tablolar)
+    adaylar.push(collect((row) => cellsOf(row, true)[symCol] ?? ''));
+    // b) yalnizca td sayilarak (tum hucreleri td olan tablolar)
+    adaylar.push(collect((row) => cellsOf(row, false)[symCol] ?? ''));
   }
-  return out;
+  // c) baslik yoksa/tutmazsa: satirdaki ilk sembol-bicimli VERI hucresi.
+  //    Satir basligi <th> sirket adi tasir, sembol degil — o yuzden td-only.
+  adaylar.push(collect((row) => cellsOf(row, false).find((c) => usable(clean(c))) ?? ''));
+
+  return adaylar.filter((x) => x.length > 0);
 }
 
 /**
@@ -118,8 +149,9 @@ function symbolsFromTable(table) {
  * uretimde tam olarak bu oldu: liste sacmaladi, aralik kontrolune takildi,
  * Dow hic acilmadi.
  *
- * Artik tahmin yok: TUM tablolar denenir ve beklenen uye araligina OTURAN ilk
- * sonuc kabul edilir. Dogru tabloyu veri secer, isimlendirme degil.
+ * Artik tahmin yok: TUM tablolar x TUM okuma stratejileri denenir ve beklenen
+ * uye araligina OTURAN ilk sonuc kabul edilir. Dogru tabloyu ve dogru sutunu
+ * VERI secer — isimlendirme ya da varsayim degil.
  *
  * @param {string} html
  * @param {[number, number]} [range] beklenen [en az, en cok] uye
@@ -138,7 +170,7 @@ export function parseWikiConstituents(html, range) {
   tables.sort((a, b) => Number(/id\s*=\s*["']constituents["']/i.test(b)) -
                         Number(/id\s*=\s*["']constituents["']/i.test(a)));
 
-  const adaylar = tables.map(symbolsFromTable).filter((x) => x.length > 0);
+  const adaylar = tables.flatMap(tableCandidates);
   if (adaylar.length === 0) return [];
 
   if (range) {
