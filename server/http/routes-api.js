@@ -145,6 +145,49 @@ export async function handleApi(req, res, url) {
     return true;
   }
 
+  if (p === '/api/index-probe') {
+    // Teshis: S&P 500 ve Dow 30 UYE LISTELERI nasdaq.com'un ayni ucundan
+    // geliyor mu? Slug adlari belgeli degil, o yuzden birkac aday denenir.
+    //
+    // Bu ucun varlik sebebi tek bir kural: uye listeleri model bilgisinden
+    // YAZILMAZ. 503 sembollük bir listeyi ezberden dokmek dogrulanamaz bir
+    // hata kaynagi olurdu. Liste kaynaktan gelmiyorsa o endeks acilmaz.
+    const { fetchIndexList } = await import('../sources/nasdaq.js');
+    const adaylar = [
+      ['nasdaq100', 'NASDAQ-100 (kontrol — bu calisiyor olmali)'],
+      ['sp500', 'S&P 500'],
+      ['spx', 'S&P 500 (alternatif slug)'],
+      ['dowjones', 'Dow Jones 30'],
+      ['dow-jones', 'Dow Jones 30 (alternatif slug)'],
+      ['djia', 'Dow Jones 30 (alternatif slug)'],
+    ];
+    const sonuc = [];
+    for (const [slug, aciklama] of adaylar) {
+      try {
+        const r = await fetchIndexList(slug, 600);
+        const ilk = r.rows[0];
+        sonuc.push({
+          slug, aciklama, ok: r.rows.length > 0, uye: r.rows.length,
+          // Piyasa degeri alani S&P icin SART: pay adedi ondan turetiliyor.
+          piyasaDegeriVar: r.rows.filter((x) => x.marketCap > 0).length,
+          ornek: r.rows.slice(0, 5).map((x) => x.symbol),
+          ilkSatirAlanlari: ilk ? Object.keys(
+            (r.raw?.data?.data?.rows ?? r.raw?.data?.rows ?? [])[0] ?? {}
+          ) : [],
+        });
+      } catch (err) {
+        sonuc.push({ slug, aciklama, ok: false, hata: String(err?.message ?? err).slice(0, 120) });
+      }
+      await new Promise((r2) => setTimeout(r2, 400));
+    }
+    json(res, 200, {
+      not: 'uye > 0 VE piyasaDegeriVar ~ uye olan slug kullanilabilir. ' +
+        'Dow icin piyasa degeri gerekmez (fiyat agirlikli).',
+      sonuc,
+    });
+    return true;
+  }
+
   if (p === '/api/nasdaq-probe') {
     // Teshis: nasdaq.com liste ucu ne donduruyor? Ham cevabin ilk 600
     // karakteri + kac satir ayristirildigi. 403 gorursek datamerkezi engeli.

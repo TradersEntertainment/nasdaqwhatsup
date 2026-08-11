@@ -22,7 +22,8 @@
 import { fetchWithTimeout, withRetry, assertOk } from '../lib/retry.js';
 import { log } from '../lib/log.js';
 
-const LIST_URL = 'https://api.nasdaq.com/api/quote/list-type/nasdaq100';
+const LIST_BASE = 'https://api.nasdaq.com/api/quote/list-type';
+const LIST_URL = `${LIST_BASE}/nasdaq100`;
 
 export const BROWSER_HEADERS = {
   // User-Agent SART: bu uc, UA'siz istekleri (Node'un varsayilani gibi)
@@ -73,6 +74,11 @@ export function parseNasdaqList(json) {
     const price = parseMoney(r?.lastSalePrice ?? r?.lastsale ?? r?.lastSale);
     if (!(price > 0)) continue;
 
+    // Piyasa degeri: kap-agirlikli endekslerde (S&P 500) pay adedi buradan
+    // TURETILIR — payAdedi = piyasaDegeri / fiyat. NDX'te gercek pay adetleri
+    // elimizde oldugu icin kullanilmaz; SPX icin tek anahtarsiz yol bu.
+    const marketCap = parseMoney(r?.marketCap ?? r?.marketcap ?? r?.MarketCap);
+
     // Net degisim → onceki kapanis. Alan adi surumler arasi degisebiliyor.
     const net = parseMoney(r?.netChange ?? r?.netchange ?? r?.change);
     let prevClose = Number.isFinite(net) ? price - net : null;
@@ -90,9 +96,30 @@ export function parseNasdaqList(json) {
       price,
       prevClose,
       pct: Number.isFinite(pct) ? pct : null,
+      marketCap: marketCap > 0 ? marketCap : null,
     });
   }
   return out;
+}
+
+/**
+ * Herhangi bir endeksin uye listesi (ayni uc, farkli slug).
+ *
+ * ⚠ Uye listeleri ASLA model bilgisinden yazilmaz. 503 sembollük bir S&P 500
+ * listesini ezberden dokmek, agirliklari uydurmakla ayni sinif hata olurdu —
+ * ve tek tek dogrulanamaz. Liste kaynaktan gelmezse o endeks acilmaz.
+ *
+ * @param {string} slug 'nasdaq100' | 'sp500' | 'dowjones' ...
+ * @param {number} [limit]
+ */
+export async function fetchIndexList(slug, limit = 600) {
+  const url = `${LIST_BASE}/${encodeURIComponent(slug)}?limit=${limit}`;
+  const json = await withRetry(async () => {
+    const res = await fetchWithTimeout(url, { timeoutMs: 20_000, headers: BROWSER_HEADERS });
+    assertOk(res, url);
+    return res.json();
+  }, { tries: 2, label: `nasdaq-list:${slug}` });
+  return { rows: parseNasdaqList(json), fetchedAt: Date.now(), raw: json };
 }
 
 /**
